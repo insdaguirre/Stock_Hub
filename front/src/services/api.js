@@ -1,8 +1,6 @@
 // src/services/api.js
 const ALPHA_VANTAGE_API_KEY = process.env.REACT_APP_ALPHA_VANTAGE_API_KEY || 'YOUR_API_KEY_HERE';
-const BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://stock-hub-api.vercel.app/api'
-  : 'http://localhost:8000/api';
+const BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000/api';
 
 // eslint-disable-next-line no-unused-vars
 // Fetch historical data from Alpha Vantage
@@ -164,10 +162,20 @@ const calculateMAComponent = (prices) => {
 export const getPredictions = async (symbol) => {
   try {
     const response = await fetch(`${BASE_URL}/predictions/${symbol}`);
-    if (!response.ok) {
-      throw new Error('Failed to fetch predictions');
+    let data;
+    if (response.status === 202) {
+      const { job_id } = await response.json();
+      const jobResult = await pollJob(job_id);
+      if (jobResult.status !== 'done') {
+        throw new Error(`Job not completed: ${jobResult.status}`);
+      }
+      data = jobResult.result;
+    } else {
+      if (!response.ok) {
+        throw new Error('Failed to fetch predictions');
+      }
+      data = await response.json();
     }
-    const data = await response.json();
     
     // Format the prediction for each model type
     const modelPredictions = {
@@ -212,6 +220,23 @@ export const getPredictions = async (symbol) => {
     console.error('Error fetching predictions:', error);
     throw error;
   }
+};
+
+// Poll job status until done/failed/timeout
+const pollJob = async (jobId, timeoutMs = 20000, intervalMs = 1000) => {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const r = await fetch(`${BASE_URL}/jobs/${jobId}`);
+    if (!r.ok) {
+      throw new Error('Failed to poll job');
+    }
+    const js = await r.json();
+    if (js.status === 'done' || js.status === 'failed') {
+      return js;
+    }
+    await new Promise(res => setTimeout(res, intervalMs));
+  }
+  return { status: 'timeout' };
 };
 
 // Get current stock data

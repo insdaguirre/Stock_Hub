@@ -271,7 +271,7 @@ const StockPage = () => { //Defines StockPage as a functional react component
 
       <ChartContainer>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={[...stockData.historicalData, ...predictions.forecastData]}>
+          <LineChart data={[...stockData.historicalData, { date: predictions.nextDate, prediction: predictions.models[modelId]?.prediction }]}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="date" />
             <YAxis />
@@ -302,17 +302,17 @@ const StockPage = () => { //Defines StockPage as a functional react component
         <MetricsGrid>
           <Metric>
             <MetricLabel>Prediction (7d)</MetricLabel>
-            <MetricValue isPositive={predictions.sevenDayPrediction > 0} isNegative={predictions.sevenDayPrediction < 0}>
-              {predictions.sevenDayPrediction > 0 ? '+' : ''}{predictions.sevenDayPrediction.toFixed(2)}%
+            <MetricValue isPositive={(predictions.models[modelId]?.change_percent || 0) > 0} isNegative={(predictions.models[modelId]?.change_percent || 0) < 0}>
+              {((predictions.models[modelId]?.change_percent) ?? 0).toFixed(2)}%
             </MetricValue>
           </Metric>
           <Metric>
             <MetricLabel>Model Accuracy</MetricLabel>
-            <MetricValue>{predictions.accuracy}%</MetricValue>
+            <MetricValue>{predictions.models[modelId]?.accuracy ?? 0}%</MetricValue>
           </Metric>
           <Metric>
             <MetricLabel>Confidence Score</MetricLabel>
-            <MetricValue>{predictions.confidenceScore}%</MetricValue>
+            <MetricValue>{predictions.models[modelId]?.confidence ?? 0}%</MetricValue>
           </Metric>
         </MetricsGrid>
       </ModelInfo>
