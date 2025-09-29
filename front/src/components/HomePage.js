@@ -581,7 +581,7 @@ const HomePage = () => {
           </span>
           <span> • storage {storageStatus}</span>
         </div>
-        <div>Stock Prediction Hub • Demo build</div>
+        <div>Stock Hub Demo Build</div>
       </div>
     </Container>
   );
