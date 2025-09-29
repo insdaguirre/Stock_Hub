@@ -185,20 +185,7 @@ async def root():
 @app.get("/api/predictions/{symbol}")
 async def get_predictions(symbol: str):
     try:
-        # Fetch historical data
-        historical_data = fetch_stock_data(symbol)
-        
-        if not historical_data:
-            return {"error": "No data available for this symbol"}
-        
-        # Get closing prices
-        prices = [entry['price'] for entry in historical_data]
-        
-        # Calculate next day's date
-        last_date = datetime.strptime(historical_data[-1]['date'], '%Y-%m-%d')
-        next_date = (last_date + timedelta(days=1)).strftime('%Y-%m-%d')
-        
-        # Check cached prediction (keyed by model version)
+        # Check cached prediction (keyed by model version) BEFORE any upstream calls
         pred_key = f"pred:simple:{MODEL_VERSION}:{symbol}"
         cached_pred = _cache_get(pred_key)
         if cached_pred:
@@ -218,7 +205,19 @@ async def get_predictions(symbol: str):
                 job = job_queue.enqueue('worker.job_predict_next', symbol)
             return JSONResponse(content={"job_id": job.id}, status_code=202)
 
-        # Fallback: Calculate prediction synchronously
+        # Fallback: Calculate prediction synchronously (no queue available)
+        # Fetch historical data
+        historical_data = fetch_stock_data(symbol)
+        if not historical_data:
+            return {"error": "No data available for this symbol"}
+
+        # Get closing prices
+        prices = [entry['price'] for entry in historical_data]
+
+        # Calculate next day's date
+        last_date = datetime.strptime(historical_data[-1]['date'], '%Y-%m-%d')
+        next_date = (last_date + timedelta(days=1)).strftime('%Y-%m-%d')
+
         predicted_price = calculate_prediction(prices)
         current_price = prices[-1]
         change_percent = ((predicted_price - current_price) / current_price) * 100
