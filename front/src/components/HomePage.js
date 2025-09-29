@@ -1,5 +1,5 @@
 // src/components/HomePage.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { getPredictions, BASE_URL } from '../services/api';
@@ -322,6 +322,7 @@ const HomePage = () => {
   // API status footer state
   const [apiLatencyMs, setApiLatencyMs] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [apiStatus, setApiStatus] = useState('unknown');
 
   // Function to simulate loading progress for each model
   const simulateProgress = (modelIds) => {
@@ -420,6 +421,25 @@ const HomePage = () => {
       setLoading(false);
     }
   };
+
+  // Periodically ping API status
+  useEffect(() => {
+    let mounted = true;
+    const ping = async () => {
+      try {
+        const r = await fetch(`${BASE_URL}/status`);
+        if (!r.ok) throw new Error('status not ok');
+        const js = await r.json();
+        if (!mounted) return;
+        setApiStatus(js.redis === 'ok' && js.queue === 'ok' ? 'ok' : 'degraded');
+      } catch (e) {
+        if (mounted) setApiStatus('err');
+      }
+    };
+    ping();
+    const id = setInterval(ping, 60000);
+    return () => { mounted = false; clearInterval(id); };
+  }, []);
 
   const handleSearch = (e) => {
     setSearchTerm(e.target.value);
@@ -554,6 +574,14 @@ const HomePage = () => {
           {lastUpdated && (
             <span> • updated {lastUpdated.toLocaleTimeString()}</span>
           )}
+          <span>
+            {' '}• status{' '}
+            <span style={{
+              display: 'inline-block', width: 8, height: 8, borderRadius: 999,
+              backgroundColor: apiStatus === 'ok' ? '#34C759' : apiStatus === 'degraded' ? '#FFD60A' : '#FF3B30'
+            }} />{' '}
+            {apiStatus}
+          </span>
         </div>
         <div>Stock Prediction Hub • Demo build</div>
       </div>
