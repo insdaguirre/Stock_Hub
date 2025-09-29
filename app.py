@@ -34,6 +34,7 @@ app.add_middleware(
 # Get Alpha Vantage API key from environment variables
 ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY')
 MODEL_VERSION = os.getenv('MODEL_VERSION', 'v1')
+ADMIN_API_KEY = os.getenv('ADMIN_API_KEY')
 
 # Redis
 REDIS_URL = os.getenv('REDIS_URL')
@@ -312,6 +313,31 @@ async def api_status():
         "queue": "ok" if queue_ok else "err",
         "storage": "ok" if storage_ok else "err"
     }
+
+
+@app.post("/api/precompute")
+async def precompute(symbols: str, api_key: str | None = None):
+    """Enqueue prediction jobs for a comma-separated list of symbols.
+    Example: POST /api/precompute?symbols=AAPL,MSFT,TSLA&api_key=XYZ
+    """
+    if ADMIN_API_KEY:
+        if not api_key or api_key != ADMIN_API_KEY:
+            raise HTTPException(status_code=401, detail="invalid api key")
+    if not job_queue:
+        raise HTTPException(status_code=503, detail="Job queue unavailable")
+    if not symbols:
+        raise HTTPException(status_code=400, detail="symbols required")
+    raw = [s.strip().upper() for s in symbols.split(',') if s.strip()]
+    unique_symbols = sorted(set(raw))
+    jobs = []
+    try:
+        from worker import job_predict_next
+        for sym in unique_symbols:
+            job = job_queue.enqueue(job_predict_next, sym)
+            jobs.append({"symbol": sym, "job_id": job.id})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"enqueued": jobs}
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000) 

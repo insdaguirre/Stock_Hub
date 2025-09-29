@@ -1,0 +1,8 @@
+1Precompute + cache warming
+Add /api/precompute?symbols=AAPL,MSFT,... that enqueues jobs; trigger it nightly via GitHub Actions to keep artifacts and Redis warm.
+2Frontend env and deployment hygiene
+Remove hardcoded API fallback; build with REACT_APP_API_BASE_URL only and document the dev/prod values.
+3 Observability and alerts
+Structured logs (request/job IDs, durations, cache hits).
+Basic counters (AV calls, cache hit rate, job durations).
+Alert on worker failures and high error rate.

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
-import { getPredictions, BASE_URL } from '../services/api';
+import { getPredictions, BASE_URL, getApiStatus } from '../services/api';
 import ProgressBar from './ProgressBar';
 
 const Container = styled.div`
@@ -323,6 +323,7 @@ const HomePage = () => {
   const [apiLatencyMs, setApiLatencyMs] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [apiStatus, setApiStatus] = useState('unknown');
+  const [storageStatus, setStorageStatus] = useState('unknown');
 
   // Function to simulate loading progress for each model
   const simulateProgress = (modelIds) => {
@@ -426,15 +427,11 @@ const HomePage = () => {
   useEffect(() => {
     let mounted = true;
     const ping = async () => {
-      try {
-        const r = await fetch(`${BASE_URL}/status`);
-        if (!r.ok) throw new Error('status not ok');
-        const js = await r.json();
-        if (!mounted) return;
-        setApiStatus(js.redis === 'ok' && js.queue === 'ok' ? 'ok' : 'degraded');
-      } catch (e) {
-        if (mounted) setApiStatus('err');
-      }
+      const status = await getApiStatus();
+      if (!mounted) return;
+      setStorageStatus(status.storage);
+      const overall = status.redis === 'ok' && status.queue === 'ok' && status.storage === 'ok' ? 'ok' : (status.redis === 'err' || status.queue === 'err') ? 'err' : 'degraded';
+      setApiStatus(overall);
     };
     ping();
     const id = setInterval(ping, 60000);
@@ -582,6 +579,7 @@ const HomePage = () => {
             }} />{' '}
             {apiStatus}
           </span>
+          <span> • storage {storageStatus}</span>
         </div>
         <div>Stock Prediction Hub • Demo build</div>
       </div>

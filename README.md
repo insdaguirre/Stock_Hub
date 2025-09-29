@@ -33,6 +33,7 @@ uvicorn app:app --reload
 - `MODELS_BUCKET`: S3 bucket name for model artifacts
 - `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`: credentials
 - `S3_REGION` (optional), `S3_ENDPOINT` (optional for R2/B2/MinIO)
+- `ADMIN_API_KEY`: required to call `/api/precompute` when set
 
 ---
 

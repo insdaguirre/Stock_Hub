@@ -264,3 +264,19 @@ export const getStockData = async (symbol) => {
     throw error;
   }
 };
+
+// Health/status fetcher for footer
+export const getApiStatus = async () => {
+  try {
+    const r = await fetch(`${BASE_URL}/status`);
+    if (!r.ok) throw new Error('status not ok');
+    const js = await r.json();
+    return {
+      redis: js.redis,
+      queue: js.queue,
+      storage: js.storage || 'unknown'
+    };
+  } catch (_) {
+    return { redis: 'err', queue: 'err', storage: 'err' };
+  }
+};
