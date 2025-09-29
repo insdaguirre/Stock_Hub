@@ -14,6 +14,7 @@ import hashlib
 import redis
 from rq import Queue
 from rq.job import Job
+from datetime import timezone
 
 # Load environment variables
 load_dotenv()
@@ -287,6 +288,27 @@ async def get_stock_data(symbol: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.get("/api/status")
+async def api_status():
+    now = datetime.now(timezone.utc).isoformat()
+    redis_ok = False
+    queue_ok = False
+    try:
+        if redis_client and redis_client.ping():
+            redis_ok = True
+    except Exception:
+        redis_ok = False
+    try:
+        if job_queue and job_queue.connection.ping():
+            queue_ok = True
+    except Exception:
+        queue_ok = False
+    return {
+        "time": now,
+        "redis": "ok" if redis_ok else "err",
+        "queue": "ok" if queue_ok else "err"
+    }
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000) 
