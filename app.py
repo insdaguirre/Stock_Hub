@@ -7,6 +7,7 @@ import numpy as np
 from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
+import settings
 import time
 import json
 import hashlib
@@ -22,7 +23,7 @@ app = FastAPI()
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

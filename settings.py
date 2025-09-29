@@ -8,10 +8,9 @@ load_dotenv()
 ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY')
 
 # CORS settings
-CORS_ORIGINS = [
-    "http://localhost:3000",
-    "https://insdaguirre.github.io"
-]
+origin_local = os.getenv('CORS_ORIGIN_LOCAL', 'http://localhost:3000')
+origin_prod = os.getenv('CORS_ORIGIN_PROD', 'https://insdaguirre.github.io')
+CORS_ORIGINS = [origin_local, origin_prod]
 
 # App settings
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
