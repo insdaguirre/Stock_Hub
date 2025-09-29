@@ -1,6 +1,18 @@
 // src/services/api.js
 const ALPHA_VANTAGE_API_KEY = process.env.REACT_APP_ALPHA_VANTAGE_API_KEY || 'YOUR_API_KEY_HERE';
-const BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000/api';
+// Resolve API base URL at build/runtime. Prefer env; when hosted on GitHub Pages, fall back to Railway.
+const inferProdBase = () => {
+  try {
+    if (typeof window !== 'undefined') {
+      const host = window.location.hostname || '';
+      if (host.endsWith('github.io')) {
+        return 'https://web-production-b6d2.up.railway.app/api';
+      }
+    }
+  } catch (_) {}
+  return 'http://localhost:8000/api';
+};
+const BASE_URL = process.env.REACT_APP_API_BASE_URL || inferProdBase();
 
 // eslint-disable-next-line no-unused-vars
 // Fetch historical data from Alpha Vantage
