@@ -10,7 +10,7 @@ A stock prediction API with multiple prediction models including LSTM, Random Fo
 
 ## Deployment
 
-This application is designed to be deployed on Render.
+This application is designed to be deployed on Railway (Web + Worker) with Redis. Frontend is deployed separately.
 
 ## Local Development
 
@@ -21,13 +21,18 @@ pip install -r requirements.txt
 
 2. Run the server:
 ```bash
-python server.py
+uvicorn app:app --reload
 ```
 
 ## Environment Variables
 
-- `ALPHA_VANTAGE__KEY`: Your Alpha Vantage API key
+- `ALPHA_VANTAGE_API_KEY`: Alpha Vantage API key
 - `PORT`: The port to run the server on (default: 8000)
+- `REDIS_URL`: Redis connection string
+- `MODEL_VERSION`: Version tag to bust caches and model keys (e.g., v1)
+- `MODELS_BUCKET`: S3 bucket name for model artifacts
+- `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`: credentials
+- `S3_REGION` (optional), `S3_ENDPOINT` (optional for R2/B2/MinIO)
 
 ---
 

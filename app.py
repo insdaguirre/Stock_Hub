@@ -15,6 +15,7 @@ import redis
 from rq import Queue
 from rq.job import Job
 from datetime import timezone
+from storage import storage_health
 
 # Load environment variables
 load_dotenv()
@@ -304,10 +305,12 @@ async def api_status():
             queue_ok = True
     except Exception:
         queue_ok = False
+    storage_ok = storage_health()
     return {
         "time": now,
         "redis": "ok" if redis_ok else "err",
-        "queue": "ok" if queue_ok else "err"
+        "queue": "ok" if queue_ok else "err",
+        "storage": "ok" if storage_ok else "err"
     }
 if __name__ == "__main__":
     import uvicorn
