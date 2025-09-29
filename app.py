@@ -201,9 +201,10 @@ async def get_predictions(symbol: str):
                 # enqueue callable by reference if possible
                 from worker import job_predict_next
                 job = job_queue.enqueue(job_predict_next, symbol)
+                return JSONResponse(content={"job_id": job.id}, status_code=202)
             except Exception:
-                job = job_queue.enqueue('worker.job_predict_next', symbol)
-            return JSONResponse(content={"job_id": job.id}, status_code=202)
+                # If enqueue fails for any reason (e.g., Redis connectivity), fall back to synchronous compute
+                pass
 
         # Fallback: Calculate prediction synchronously (no queue available)
         # Fetch historical data
