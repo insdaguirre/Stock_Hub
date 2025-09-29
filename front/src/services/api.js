@@ -12,7 +12,7 @@ const inferProdBase = () => {
   } catch (_) {}
   return 'http://localhost:8000/api';
 };
-const BASE_URL = process.env.REACT_APP_API_BASE_URL || inferProdBase();
+export const BASE_URL = process.env.REACT_APP_API_BASE_URL || inferProdBase();
 
 // eslint-disable-next-line no-unused-vars
 // Fetch historical data from Alpha Vantage

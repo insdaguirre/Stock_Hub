@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
-import { getPredictions } from '../services/api';
+import { getPredictions, BASE_URL } from '../services/api';
 import ProgressBar from './ProgressBar';
 
 const Container = styled.div`
@@ -319,6 +319,9 @@ const HomePage = () => {
   // New state for tracking loading progress
   const [loadingProgress, setLoadingProgress] = useState({});
   const [overallProgress, setOverallProgress] = useState(0);
+  // API status footer state
+  const [apiLatencyMs, setApiLatencyMs] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   // Function to simulate loading progress for each model
   const simulateProgress = (modelIds) => {
@@ -388,7 +391,11 @@ const HomePage = () => {
       const progressInterval = simulateProgress(modelIds);
       
       // Fetch actual predictions
+      const t0 = performance.now();
       const data = await getPredictions(selectedSymbol);
+      const t1 = performance.now();
+      setApiLatencyMs(Math.max(1, Math.round(t1 - t0)));
+      setLastUpdated(new Date());
       setPredictionsData(data);
       
       // Ensure we show 100% progress before stopping
@@ -536,6 +543,20 @@ const HomePage = () => {
           })}
         </ModelsList>
       )}
+
+      {/* Footer: About / API status */}
+      <div style={{ marginTop: 24, color: '#666', fontSize: 12 }}>
+        <div>
+          API: <a href={BASE_URL.replace('/api','/')} target="_blank" rel="noreferrer" style={{ color: '#0A84FF' }}>{BASE_URL}</a>
+          {apiLatencyMs != null && (
+            <span> • last request {apiLatencyMs} ms</span>
+          )}
+          {lastUpdated && (
+            <span> • updated {lastUpdated.toLocaleTimeString()}</span>
+          )}
+        </div>
+        <div>Stock Prediction Hub • Demo build</div>
+      </div>
     </Container>
   );
 };
