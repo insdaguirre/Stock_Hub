@@ -112,12 +112,14 @@ def _request_with_backoff(url, max_retries=3):
 
 def fetch_stock_data(symbol):
     """Fetch historical stock data from Alpha Vantage."""
+    t0 = time.perf_counter()
     cache_key = f"av:daily:{symbol}"
     cached = _cache_get(cache_key)
     if cached:
         try:
             payload = json.loads(cached)
             if isinstance(payload, list) and payload:
+                print(json.dumps({"route": "av_daily", "symbol": symbol, "cache_hit": True, "latency_ms": int((time.perf_counter()-t0)*1000)}))
                 return payload
         except Exception:
             pass
@@ -141,16 +143,19 @@ def fetch_stock_data(symbol):
         })
     
     historical_data = sorted(historical_data, key=lambda x: x['date'])
-    _cache_set(cache_key, json.dumps(historical_data), ttl_seconds=15 * 60)
+    _cache_set(cache_key, json.dumps(historical_data), ttl_seconds=30 * 60)
+    print(json.dumps({"route": "av_daily", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000)}))
     return historical_data
 
 def fetch_global_quote(symbol):
     """Fetch current price and previous close using GLOBAL_QUOTE."""
+    t0 = time.perf_counter()
     cache_key = f"av:quote:{symbol}"
     cached = _cache_get(cache_key)
     if cached:
         try:
             js = json.loads(cached)
+            print(json.dumps({"route": "av_quote", "symbol": symbol, "cache_hit": True, "latency_ms": int((time.perf_counter()-t0)*1000)}))
             return float(js['price']), float(js['previousClose'])
         except Exception:
             pass
@@ -167,7 +172,8 @@ def fetch_global_quote(symbol):
         prev_close = float(quote.get('08. previous close', 0))
     except Exception:
         raise HTTPException(status_code=502, detail='Invalid quote data format')
-    _cache_set(cache_key, json.dumps({"price": price, "previousClose": prev_close}), ttl_seconds=5 * 60)
+    _cache_set(cache_key, json.dumps({"price": price, "previousClose": prev_close}), ttl_seconds=10 * 60)
+    print(json.dumps({"route": "av_quote", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000)}))
     return price, prev_close
 
 def calculate_prediction(prices, days_ahead=1):
@@ -184,6 +190,7 @@ async def root():
 
 @app.get("/api/predictions/{symbol}")
 async def get_predictions(symbol: str):
+    started = time.perf_counter()
     try:
         # Check cached prediction (keyed by model version) BEFORE any upstream calls
         pred_key = f"pred:simple:{MODEL_VERSION}:{symbol}"
@@ -191,6 +198,7 @@ async def get_predictions(symbol: str):
         if cached_pred:
             try:
                 js = json.loads(cached_pred)
+                print(json.dumps({"route": "/api/predictions", "symbol": symbol, "cache_hit": True, "status": 200, "latency_ms": int((time.perf_counter()-started)*1000)}))
                 return js
             except Exception:
                 pass
@@ -201,6 +209,7 @@ async def get_predictions(symbol: str):
                 # enqueue callable by reference if possible
                 from worker import job_predict_next
                 job = job_queue.enqueue(job_predict_next, symbol)
+                print(json.dumps({"route": "/api/predictions", "symbol": symbol, "queued": True, "job_id": job.id, "status": 202, "latency_ms": int((time.perf_counter()-started)*1000)}))
                 return JSONResponse(content={"job_id": job.id}, status_code=202)
             except Exception:
                 # If enqueue fails for any reason (e.g., Redis connectivity), fall back to synchronous compute
@@ -239,6 +248,7 @@ async def get_predictions(symbol: str):
         }
 
         _cache_set(pred_key, json.dumps(response), ttl_seconds=60 * 60)
+        print(json.dumps({"route": "/api/predictions", "symbol": symbol, "cache_hit": False, "status": 200, "latency_ms": int((time.perf_counter()-started)*1000)}))
         return response
     except HTTPException:
         raise
@@ -265,10 +275,12 @@ async def get_job_status(job_id: str):
 
 @app.get("/api/stock/{symbol}")
 async def get_stock_data(symbol: str):
+    started = time.perf_counter()
     try:
         # Return current price and previous close; include historical for UI charting
         price, previous_close = fetch_global_quote(symbol)
         historical_data = fetch_stock_data(symbol)
+        print(json.dumps({"route": "/api/stock", "symbol": symbol, "status": 200, "latency_ms": int((time.perf_counter()-started)*1000)}))
         return {"price": price, "previousClose": previous_close, "historicalData": historical_data}
     except HTTPException:
         raise
