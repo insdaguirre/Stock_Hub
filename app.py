@@ -16,6 +16,7 @@ from rq import Queue
 from rq.job import Job
 from datetime import timezone
 from storage import storage_health
+from typing import Optional
 
 # Load environment variables
 load_dotenv()
@@ -316,7 +317,7 @@ async def api_status():
 
 
 @app.post("/api/precompute")
-async def precompute(symbols: str, api_key: str | None = None):
+async def precompute(symbols: str, api_key: Optional[str] = None):
     """Enqueue prediction jobs for a comma-separated list of symbols.
     Example: POST /api/precompute?symbols=AAPL,MSFT,TSLA&api_key=XYZ
     """
