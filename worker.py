@@ -7,6 +7,13 @@ from rq import Queue
 import app as app_module
 from storage import load_model_bytes, save_model_bytes
 import pickle
+import os
+import json
+import requests
+from prometheus_client import Counter
+import boto3
+
+JOB_FAILURES = Counter('worker_job_failures_total', 'Worker job failures', ['task'])
 
 
 def _get_queue():
@@ -78,6 +85,31 @@ def job_predict_next(symbol: str):
     if app_module.redis_client:
         app_module.redis_client.set(pred_key, json.dumps(response), ex=60 * 60)
     return response
+
+
+def _notify_failure(task: str, message: str):
+    JOB_FAILURES.labels(task=task).inc()
+    # 1) Try AWS SNS email (no sender setup needed)
+    topic_arn = os.getenv('ALERT_SNS_TOPIC_ARN')
+    sns_region = os.getenv('SNS_REGION') or os.getenv('S3_REGION') or 'us-east-1'
+    if topic_arn:
+        try:
+            sns = boto3.client('sns', region_name=sns_region,
+                               aws_access_key_id=os.getenv('S3_ACCESS_KEY_ID'),
+                               aws_secret_access_key=os.getenv('S3_SECRET_ACCESS_KEY'))
+            sns.publish(TopicArn=topic_arn, Subject=f"StockHub worker failure: {task}", Message=message[:10000])
+            return
+        except Exception:
+            pass
+    # 2) Fallback to webhook JSON if configured
+    url = os.getenv('ALERT_WEBHOOK_URL')
+    if not url:
+        return
+    payload = {"task": task, "message": message}
+    try:
+        requests.post(url, json=payload, timeout=5)
+    except Exception:
+        pass
 
 
 if __name__ == '__main__':

@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 import requests
 import pandas as pd
@@ -17,6 +17,20 @@ from rq.job import Job
 from datetime import timezone
 from storage import storage_health
 from typing import Optional
+from starlette.middleware.base import BaseHTTPMiddleware
+from uuid import uuid4
+import logging
+
+# Prometheus metrics
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+
+REQUEST_COUNT = Counter(
+    'http_requests_total', 'Total HTTP requests', ['route', 'status']
+)
+AV_CALLS = Counter('alpha_vantage_calls_total', 'Alpha Vantage upstream calls', ['type'])
+CACHE_HITS = Counter('cache_hits_total', 'Cache hits', ['key'])
+JOB_ENQUEUED = Counter('jobs_enqueued_total', 'Jobs enqueued', ['task'])
+JOB_DURATION = Histogram('job_duration_seconds', 'Background job durations', ['task'])
 
 # Load environment variables
 load_dotenv()
@@ -31,6 +45,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class RequestIdMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        request_id = request.headers.get('x-request-id') or str(uuid4())
+        response = None
+        try:
+            response = await call_next(request)
+            return response
+        finally:
+            if response is None:
+                response = Response()
+            response.headers['x-request-id'] = request_id
+
+
+app.add_middleware(RequestIdMiddleware)
+
+logger = logging.getLogger("stockhub")
+logging.basicConfig(level=logging.INFO)
 
 # Get Alpha Vantage API key from environment variables
 ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY')
@@ -59,7 +92,10 @@ def _cache_get(key: str):
     if not redis_client:
         return None
     try:
-        return redis_client.get(key)
+        val = redis_client.get(key)
+        if val is not None:
+            CACHE_HITS.labels(key=key.split(':')[0]).inc()
+        return val
     except Exception:
         return None
 
@@ -133,6 +169,7 @@ def fetch_stock_data(symbol):
 
     url = f'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}&outputsize=compact'
     data = _request_with_backoff(url)
+    AV_CALLS.labels(type='daily').inc()
     
     if "Error Message" in data:
         raise Exception(data["Error Message"])
@@ -168,6 +205,7 @@ def fetch_global_quote(symbol):
 
     url = f'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}'
     data = _request_with_backoff(url)
+    AV_CALLS.labels(type='quote').inc()
     quote = data.get('Global Quote') or {}
     if not quote:
         raise HTTPException(status_code=502, detail='No quote data available')
@@ -190,6 +228,7 @@ def calculate_prediction(prices, days_ahead=1):
 
 @app.get("/")
 async def root():
+    REQUEST_COUNT.labels(route='/', status='200').inc()
     return {"status": "API is running", "message": "Hello from Stock Hub API!"}
 
 @app.get("/api/predictions/{symbol}")
@@ -203,6 +242,7 @@ async def get_predictions(symbol: str):
             try:
                 js = json.loads(cached_pred)
                 print(json.dumps({"route": "/api/predictions", "symbol": symbol, "cache_hit": True, "status": 200, "latency_ms": int((time.perf_counter()-started)*1000)}))
+                REQUEST_COUNT.labels(route='/api/predictions', status='200').inc()
                 return js
             except Exception:
                 pass
@@ -213,6 +253,7 @@ async def get_predictions(symbol: str):
                 # enqueue callable by reference if possible
                 from worker import job_predict_next
                 job = job_queue.enqueue(job_predict_next, symbol)
+                JOB_ENQUEUED.labels(task='predict_next').inc()
                 print(json.dumps({"route": "/api/predictions", "symbol": symbol, "queued": True, "job_id": job.id, "status": 202, "latency_ms": int((time.perf_counter()-started)*1000)}))
                 return JSONResponse(content={"job_id": job.id}, status_code=202)
             except Exception:
@@ -253,10 +294,12 @@ async def get_predictions(symbol: str):
 
         _cache_set(pred_key, json.dumps(response), ttl_seconds=60 * 60)
         print(json.dumps({"route": "/api/predictions", "symbol": symbol, "cache_hit": False, "status": 200, "latency_ms": int((time.perf_counter()-started)*1000)}))
+        REQUEST_COUNT.labels(route='/api/predictions', status='200').inc()
         return response
     except HTTPException:
         raise
     except Exception as e:
+        REQUEST_COUNT.labels(route='/api/predictions', status='500').inc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -285,10 +328,12 @@ async def get_stock_data(symbol: str):
         price, previous_close = fetch_global_quote(symbol)
         historical_data = fetch_stock_data(symbol)
         print(json.dumps({"route": "/api/stock", "symbol": symbol, "status": 200, "latency_ms": int((time.perf_counter()-started)*1000)}))
+        REQUEST_COUNT.labels(route='/api/stock', status='200').inc()
         return {"price": price, "previousClose": previous_close, "historicalData": historical_data}
     except HTTPException:
         raise
     except Exception as e:
+        REQUEST_COUNT.labels(route='/api/stock', status='500').inc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -308,12 +353,14 @@ async def api_status():
     except Exception:
         queue_ok = False
     storage_ok = storage_health()
-    return {
+    result = {
         "time": now,
         "redis": "ok" if redis_ok else "err",
         "queue": "ok" if queue_ok else "err",
         "storage": "ok" if storage_ok else "err"
     }
+    REQUEST_COUNT.labels(route='/api/status', status='200').inc()
+    return result
 
 
 @app.post("/api/precompute")
@@ -336,9 +383,17 @@ async def precompute(symbols: str, api_key: Optional[str] = None):
         for sym in unique_symbols:
             job = job_queue.enqueue(job_predict_next, sym)
             jobs.append({"symbol": sym, "job_id": job.id})
+            JOB_ENQUEUED.labels(task='predict_next').inc()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    REQUEST_COUNT.labels(route='/api/precompute', status='200').inc()
     return {"enqueued": jobs}
+
+
+@app.get('/metrics')
+async def metrics():
+    data = generate_latest()
+    return Response(content=data, media_type=CONTENT_TYPE_LATEST)
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000) 
