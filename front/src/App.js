@@ -9,7 +9,7 @@ import { ToastContainer } from 'react-toastify';
 
 function App() {
   return (
-    <Router basename="/stock_hub">
+    <Router basename="/Stock_Hub">
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/stock/:symbol" element={<StockPage />} />
