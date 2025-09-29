@@ -7,3 +7,4 @@ numpy==1.26.4
 scikit-learn==1.5.1
 redis==5.0.1
 rq==1.16.2
+gunicorn==21.2.0
