@@ -231,6 +231,8 @@ Steps:
 ## Future Updates
 
 - Expand real model training/inference (beyond demo simple predictor) and persist per-symbol artifacts
+- Lengthen prediction range, add visuals
+- Refine the front-end and overall user experience 
 - Intelligent cache invalidation and prewarming jobs (e.g., daily scheduler)
 - Stronger rate limiting and retries around Alpha Vantage usage
 - Robust CI/CD (lint, type check, tests, Docker images, preview deploys)
