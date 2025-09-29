@@ -470,7 +470,7 @@ const HomePage = () => {
   return (
     <Container>
       <Header>
-        <Title>Stock Prediction Hub</Title>
+        <Title>Stock Hub</Title>
         <DateText>{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</DateText>
       </Header>
       

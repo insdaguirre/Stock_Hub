@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <link rel="icon" id="dynamic-favicon" href="%PUBLIC_URL%/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
     <meta
@@ -24,7 +24,38 @@
       work correctly both with client-side routing and a non-root public URL.
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
-    <title>React App</title>
+    <title>Stock Hub</title>
+    <script>
+      // Generate a circular favicon from public/stockhub.jpg at runtime
+      (function() {
+        try {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.src = (window && window.location && window.location.origin ? window.location.origin : '') + ("%PUBLIC_URL%".replace(/%/g,'') ? "/Stock_Hub" : "") + "/stockhub.jpg";
+          img.onload = function () {
+            const size = 128;
+            const canvas = document.createElement('canvas');
+            canvas.width = size; canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, size, size);
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, size/2, 0, Math.PI*2);
+            ctx.closePath();
+            ctx.clip();
+            // draw image as cover
+            const ratio = Math.max(size / img.width, size / img.height);
+            const nw = img.width * ratio;
+            const nh = img.height * ratio;
+            const nx = (size - nw) / 2;
+            const ny = (size - nh) / 2;
+            ctx.drawImage(img, nx, ny, nw, nh);
+            const url = canvas.toDataURL('image/png');
+            const link = document.getElementById('dynamic-favicon');
+            if (link) { link.href = url; link.type = 'image/png'; }
+          };
+        } catch (e) { /* ignore */ }
+      })();
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
