@@ -179,7 +179,7 @@ def _standardize_articles(items):
     return cleaned
 
 
-def _fetch_news_finnhub(symbol: str | None = None, limit: int = 6):
+def _fetch_news_finnhub(symbol: Optional[str] = None, limit: int = 6):
     if not FINNHUB_API_KEY:
         return []
     try:
@@ -209,7 +209,7 @@ def _fetch_news_finnhub(symbol: str | None = None, limit: int = 6):
         return []
 
 
-def _fetch_news_alphavantage(symbol: str | None = None, limit: int = 6):
+def _fetch_news_alphavantage(symbol: Optional[str] = None, limit: int = 6):
     if not ALPHA_VANTAGE_API_KEY:
         return []
     try:
@@ -253,7 +253,7 @@ def _fetch_news_alphavantage(symbol: str | None = None, limit: int = 6):
         return []
 
 
-def fetch_news(symbol: str | None = None, limit: int = 6):
+def fetch_news(symbol: Optional[str] = None, limit: int = 6):
     """Try multiple providers and return up to limit standardized articles."""
     # Provider priority: Finnhub -> Alpha Vantage
     articles = []
