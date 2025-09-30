@@ -330,6 +330,20 @@ def fetch_global_quote(symbol):
 
     throttled = _throttle(f"quote:{symbol}")
 
+    # Prefer Finnhub when available
+    if FINNHUB_API_KEY:
+        try:
+            url = f"https://finnhub.io/api/v1/quote?symbol={symbol.upper()}&token={FINNHUB_API_KEY}"
+            js = requests.get(url, timeout=12).json()
+            price = float(js.get('c') or 0)
+            prev_close = float(js.get('pc') or 0)
+            if price > 0 and prev_close > 0:
+                _cache_set(cache_key, json.dumps({"price": price, "previousClose": prev_close}), ttl_seconds=10 * 60)
+                print(json.dumps({"route": "fh_quote", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000)}))
+                return price, prev_close
+        except Exception:
+            pass
+
     url = f'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}'
     data = _request_with_backoff(url)
     AV_CALLS.labels(type='quote').inc()
@@ -361,11 +375,52 @@ def fetch_intraday(symbol: str, interval: str = '1min'):
         except Exception:
             pass
 
+    et = ZoneInfo('America/New_York')
+    now_et = datetime.now(et)
+    session_date = now_et.date()
+    open_time = datetime.combine(session_date, datetime.min.time(), et).replace(hour=9, minute=30)
+    close_time = datetime.combine(session_date, datetime.min.time(), et).replace(hour=16, minute=0)
+
+    # Prefer Finnhub when available
+    if FINNHUB_API_KEY:
+        def fetch_candles(day_date):
+            start = int(datetime.combine(day_date, datetime.min.time(), et).replace(hour=9, minute=30).timestamp())
+            end_ts = min(datetime.combine(day_date, datetime.min.time(), et).replace(hour=16, minute=0), now_et)
+            end = int(end_ts.timestamp())
+            url = f"https://finnhub.io/api/v1/stock/candle?symbol={symbol.upper()}&resolution=1&from={start}&to={end}&token={FINNHUB_API_KEY}"
+            js = requests.get(url, timeout=15).json()
+            if js.get('s') != 'ok':
+                return []
+            times = js.get('t') or []
+            closes = js.get('c') or []
+            out = []
+            for ts_i, c_i in zip(times, closes):
+                ts = datetime.fromtimestamp(int(ts_i), tz=et)
+                if ts < open_time or ts > close_time:
+                    continue
+                out.append({"time": ts.strftime('%H:%M'), "price": float(c_i)})
+            return out
+
+        points = sorted(fetch_candles(session_date), key=lambda x: x['time'])
+        if len(points) < 2:
+            # try last trading day by stepping back one day at a time up to 5 days
+            for delta in range(1, 6):
+                prev_day = session_date - timedelta(days=delta)
+                pts = sorted(fetch_candles(prev_day), key=lambda x: x['time'])
+                if len(pts) >= 2:
+                    points = pts
+                    break
+        state = 'open' if (now_et.weekday() < 5 and open_time <= now_et <= close_time) else 'closed'
+        result = {"points": points, "market": state, "asOf": now_et.isoformat()}
+        _cache_set(cache_key, json.dumps(result), ttl_seconds=60)
+        print(json.dumps({"route": "fh_intraday", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000)}))
+        return result
+
     throttled = _throttle(f"intraday:{symbol}")
 
     url = (
         f"https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY"
-        f"&symbol={symbol}&interval={interval}&apikey={ALPHA_VANTAGE_API_KEY}&outputsize=compact"
+        f"&symbol={symbol}&interval={interval}&apikey={ALPHA_VANTAGE_API_KEY}&outputsize=full"
     )
     data = _request_with_backoff(url)
     AV_CALLS.labels(type='intraday').inc()
@@ -373,30 +428,41 @@ def fetch_intraday(symbol: str, interval: str = '1min'):
     key = f"Time Series ({interval})"
     series = data.get(key, {}) if isinstance(data, dict) else {}
 
-    et = ZoneInfo('America/New_York')
-    now_et = datetime.now(et)
-    session_date = now_et.date()
-    open_time = datetime.combine(session_date, datetime.min.time(), et).replace(hour=9, minute=30)
-    close_time = datetime.combine(session_date, datetime.min.time(), et).replace(hour=16, minute=0)
+    def extract_for_day(day_date):
+        out = []
+        start = datetime.combine(day_date, datetime.min.time(), et).replace(hour=9, minute=30)
+        end = datetime.combine(day_date, datetime.min.time(), et).replace(hour=16, minute=0)
+        for ts_str, values in series.items():
+            try:
+                ts = datetime.strptime(ts_str, '%Y-%m-%d %H:%M:%S').replace(tzinfo=et)
+            except Exception:
+                continue
+            if ts.date() != day_date:
+                continue
+            if ts < start or ts > end:
+                continue
+            try:
+                price = float(values.get('4. close') or values.get('1. open') or 0)
+            except Exception:
+                continue
+            out.append({"time": ts.strftime('%H:%M'), "price": price})
+        return sorted(out, key=lambda x: x['time'])
 
-    points = []
-    for ts_str, values in series.items():
-        try:
-            # Alpha Vantage timestamps are in ET
-            ts = datetime.strptime(ts_str, '%Y-%m-%d %H:%M:%S').replace(tzinfo=et)
-        except Exception:
-            continue
-        if ts.date() != session_date:
-            continue
-        if ts < open_time or ts > close_time:
-            continue
-        try:
-            price = float(values.get('4. close') or values.get('1. open') or 0)
-        except Exception:
-            continue
-        points.append({"time": ts.strftime('%H:%M'), "price": price})
-
-    points = sorted(points, key=lambda x: x['time'])
+    # Primary: today's regular session
+    points = extract_for_day(session_date)
+    # Fallback: if provider returns no data for today (weekend/holiday/late evening), use last available trading day
+    if len(points) < 2:
+        unique_dates = set()
+        for ts_str in series.keys():
+            try:
+                ts = datetime.strptime(ts_str, '%Y-%m-%d %H:%M:%S').replace(tzinfo=et)
+                unique_dates.add(ts.date())
+            except Exception:
+                continue
+        if unique_dates:
+            last_day = max(d for d in unique_dates if d <= session_date)
+            if last_day:
+                points = extract_for_day(last_day)
     state = 'open' if (now_et.weekday() < 5 and open_time <= now_et <= close_time) else 'closed'
     result = {"points": points, "market": state, "asOf": now_et.isoformat()}
     # Short cache as data moves intraday
