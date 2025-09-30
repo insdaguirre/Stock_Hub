@@ -277,10 +277,12 @@ def fetch_news(symbol: Optional[str] = None, limit: int = 6):
             pass
     return articles[:limit]
 
-def fetch_stock_data(symbol):
-    """Fetch historical stock data from Alpha Vantage."""
+def fetch_stock_data(symbol, full: bool = False):
+    """Fetch historical stock data from Alpha Vantage.
+    When full=True, requests the full history instead of the compact (~100 days).
+    """
     t0 = time.perf_counter()
-    cache_key = f"av:daily:{symbol}"
+    cache_key = f"av:daily:{'full' if full else 'compact'}:{symbol}"
     cached = _cache_get(cache_key)
     if cached:
         try:
@@ -294,7 +296,8 @@ def fetch_stock_data(symbol):
     # optional throttle to avoid bursts
     throttled = _throttle(f"daily:{symbol}")
 
-    url = f'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}&outputsize=compact'
+    outsize = 'full' if full else 'compact'
+    url = f'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}&outputsize={outsize}'
     data = _request_with_backoff(url)
     AV_CALLS.labels(type='daily').inc()
     
@@ -758,25 +761,42 @@ async def get_timeseries(symbol: str, range: str = '1M'):
         start = _compute_start_date(range, now_et)
         # Choose efficient resolutions per range
         def map_resolution(rk: str) -> str:
-            # 1W hourly for detail; daily up to 1Y; weekly for 2–5Y; monthly for 10Y
+            # Requested custom mapping
             if rk == '1W':
                 return '60'   # hourly
-            if rk in ['1M', '3M', '6M', 'YTD', '1Y']:
-                return 'D'    # daily up to 1Y
-            if rk in ['2Y', '5Y']:
-                return 'W'    # weekly for 2–5Y
-            if rk in ['10Y']:
-                return 'M'    # monthly for 10Y
+            if rk == '1M':
+                return '240'  # 4 hours
+            if rk in ['3M', '6M']:
+                return 'D'    # daily
+            if rk in ['YTD', '1Y']:
+                return 'D'    # daily
+            if rk == '2Y':
+                return '2D'   # 2-day (Finnhub supports numerical minutes/hours/d/w/m; we'll downsample client-side)
+            if rk == '5Y':
+                return '5D'   # 5-day
+            if rk == '10Y':
+                return '10D'  # 10-day
             return 'D'
         res = map_resolution(range)
 
-        fh = finnhub_candles(start, now_et, res)
+        # Finnhub doesn't support arbitrary multi-day strings; emulate by using daily and then downsampling when needed
+        req_res = res
+        if res in ['2D', '5D', '10D']:
+            req_res = 'D'
+
+        fh = finnhub_candles(start, now_et, req_res)
         if fh is not None and len(fh) >= 2:
+            # If we requested D but caller wants 2D/5D/10D, downsample server-side to reduce payload (keep every Nth)
+            if res in ['2D', '5D', '10D']:
+                n = 2 if res == '2D' else 5 if res == '5D' else 10
+                fh = fh[::n]
             return {"points": fh, "range": range}
 
         # Fallback to Alpha Vantage daily when Finnhub down
         try:
-            data = fetch_stock_data(symbol)
+            # For long ranges, ask AV for full history
+            want_full = range in ['YTD', '1Y', '2Y', '5Y', '10Y']
+            data = fetch_stock_data(symbol, full=want_full)
             # Compare dates only (avoid tz-aware vs naive mismatch)
             start_date = start.date()
             pts = [p for p in data if datetime.strptime(p['date'], '%Y-%m-%d').date() >= start_date]
