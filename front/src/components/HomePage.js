@@ -528,7 +528,7 @@ const HomePage = () => {
   const [range, setRange] = useState('1D');
   const [series, setSeries] = useState(null);
   const [overview, setOverview] = useState(null);
-  const seriesCacheRef = useRef({}); // { '1D': [{x, price}], '1W': [...] }
+  const seriesCacheRef = useRef({}); // { '1D': [{xTs, price}], '1W': [...] }
 
   // Local storage cache helpers (persist across reloads)
   const loadFromStorage = (sym, r) => {
@@ -641,7 +641,12 @@ const HomePage = () => {
           setSeries({ points: cached });
         } else {
           const ts = await getTimeSeries(selectedSymbol, '1D');
-          const pts = (ts.points || []).map(p => ({ x: p.time ?? p.date, price: p.price }));
+          const pts = (ts.points || []).map(p => {
+            const hhmm = (p.time ?? '').split(':');
+            const d = new Date();
+            if (hhmm.length >= 2) { d.setHours(parseInt(hhmm[0],10), parseInt(hhmm[1],10), 0, 0); }
+            return { xTs: d.getTime(), price: p.price };
+          });
           seriesCacheRef.current['1D'] = pts;
           saveToStorage(selectedSymbol, '1D', pts);
           setSeries({ points: pts });
@@ -650,7 +655,7 @@ const HomePage = () => {
         ['1W','1M','3M'].forEach(async r => {
           try {
             const bg = await getTimeSeries(selectedSymbol, r);
-            const mapped = (bg.points || []).map(p => ({ x: p.date ?? p.time, price: p.price }));
+            const mapped = (bg.points || []).map(p => ({ xTs: new Date(p.date ?? p.time).getTime(), price: p.price }));
             seriesCacheRef.current[r] = mapped;
             saveToStorage(selectedSymbol, r, mapped);
           } catch (_) {}
@@ -852,8 +857,16 @@ const HomePage = () => {
                 }
                 try {
                   const ts = await getTimeSeries(selectedSymbol, r);
-                  // Normalize x key by range: 1D uses time, others use date
-                  const pts = (ts.points || []).map(p => ({ x: r==='1D' ? (p.time ?? p.date) : (p.date ?? p.time), price: p.price }));
+                  // Normalize to numeric timestamp for robust axis scaling
+                  const pts = (ts.points || []).map(p => {
+                    if (r === '1D') {
+                      const hhmm = (p.time ?? '').split(':');
+                      const d = new Date();
+                      if (hhmm.length >= 2) { d.setHours(parseInt(hhmm[0],10), parseInt(hhmm[1],10), 0, 0); }
+                      return { xTs: d.getTime(), price: p.price };
+                    }
+                    return { xTs: new Date(p.date ?? p.time).getTime(), price: p.price };
+                  });
                   seriesCacheRef.current[r] = pts;
                   saveToStorage(selectedSymbol, r, pts);
                   setSeries({ points: pts });
@@ -872,15 +885,13 @@ const HomePage = () => {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1f1f20" />
-                  <XAxis dataKey="x" tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={30}
-                    tickFormatter={(v) => {
-                      if (range === '1D') return v;
-                      // format YYYY-MM-DD -> MM/DD
-                      if (typeof v === 'string' && v.includes('-')) {
-                        const [y,m,d] = v.split('-');
-                        return `${m}/${d}`;
+                  <XAxis dataKey="xTs" type="number" domain={['dataMin','dataMax']} tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={30}
+                    tickFormatter={(ts) => {
+                      const d = new Date(ts);
+                      if (range === '1D') {
+                        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                       }
-                      return v;
+                      return d.toLocaleDateString([], { month: '2-digit', day: '2-digit' });
                     }}
                   />
                   <YAxis dataKey="price" tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} domain={['auto','auto']} />
