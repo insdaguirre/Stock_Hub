@@ -893,11 +893,25 @@ const HomePage = () => {
                       if (range === '1D') {
                         return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                       }
+                      if (['YTD','1Y','2Y','5Y','10Y'].includes(range)) {
+                        return d.toLocaleDateString([], { month: '2-digit', day: '2-digit', year: '2-digit' });
+                      }
                       return d.toLocaleDateString([], { month: '2-digit', day: '2-digit' });
                     }}
                   />
                   <YAxis dataKey="price" tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} domain={['auto','auto']} />
-                  <Tooltip contentStyle={{ background: '#111113', border: '1px solid #1F1F20', color: '#fff' }} labelStyle={{ color: '#C7C7CC' }} />
+                  <Tooltip contentStyle={{ background: '#111113', border: '1px solid #1F1F20', color: '#fff' }} labelStyle={{ color: '#C7C7CC' }}
+                    labelFormatter={(ts) => {
+                      const d = new Date(ts);
+                      if (range === '1D') {
+                        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                      }
+                      if (['YTD','1Y','2Y','5Y','10Y'].includes(range)) {
+                        return d.toLocaleDateString([], { month: '2-digit', day: '2-digit', year: '2-digit' });
+                      }
+                      return d.toLocaleDateString([], { month: '2-digit', day: '2-digit' });
+                    }}
+                  />
                   <Area type="monotone" dataKey="price" stroke="#34C759" fill="url(#grad)" strokeWidth={2} />
                 </AreaChart>
               </ResponsiveContainer>
