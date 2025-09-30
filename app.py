@@ -403,7 +403,7 @@ def fetch_intraday(symbol: str, interval: str = '1min'):
                 ts = datetime.fromtimestamp(int(ts_i), tz=et)
                 if ts < day_open or ts > day_close:
                     continue
-                out.append({"time": ts.strftime('%H:%M'), "price": float(c_i)})
+                out.append({"time": ts.strftime('%H:%M'), "price": float(c_i), "date": ts.isoformat()})
             return out
 
         points = sorted(fetch_candles(session_date), key=lambda x: x['time'])
@@ -420,7 +420,11 @@ def fetch_intraday(symbol: str, interval: str = '1min'):
             state = 'open' if (now_et.weekday() < 5 and open_time <= now_et <= close_time) else 'closed'
             result = {"points": points, "market": state, "asOf": now_et.isoformat()}
             _cache_set(cache_key, json.dumps(result), ttl_seconds=60)
-            print(json.dumps({"route": "fh_intraday", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000), "count": len(points)}))
+            try:
+                last_dt = points[-1].get('date') or points[-1].get('time')
+            except Exception:
+                last_dt = None
+            print(json.dumps({"route": "fh_intraday", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000), "count": len(points), "last_point": last_dt}))
             return result
 
     throttled = _throttle(f"intraday:{symbol}")
@@ -452,7 +456,7 @@ def fetch_intraday(symbol: str, interval: str = '1min'):
                 price = float(values.get('4. close') or values.get('1. open') or 0)
             except Exception:
                 continue
-            out.append({"time": ts.strftime('%H:%M'), "price": price})
+            out.append({"time": ts.strftime('%H:%M'), "price": price, "date": ts.isoformat()})
         return sorted(out, key=lambda x: x['time'])
 
     # Primary: today's regular session
@@ -474,7 +478,11 @@ def fetch_intraday(symbol: str, interval: str = '1min'):
     result = {"points": points, "market": state, "asOf": now_et.isoformat()}
     # Short cache as data moves intraday
     _cache_set(cache_key, json.dumps(result), ttl_seconds=60)
-    print(json.dumps({"route": "av_intraday", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000), "count": len(points)}))
+    try:
+        last_dt = points[-1].get('date') or points[-1].get('time')
+    except Exception:
+        last_dt = None
+    print(json.dumps({"route": "av_intraday", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000), "count": len(points), "last_point": last_dt}))
     return result
 
 def calculate_prediction(prices, days_ahead=1):

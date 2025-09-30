@@ -642,6 +642,10 @@ const HomePage = () => {
         } else {
           const ts = await getTimeSeries(selectedSymbol, '1D');
           const pts = (ts.points || []).map(p => {
+            if (p.date) {
+              const dt = new Date(p.date);
+              return { xTs: dt.getTime(), price: p.price };
+            }
             const hhmm = (p.time ?? '').split(':');
             const d = new Date();
             if (hhmm.length >= 2) { d.setHours(parseInt(hhmm[0],10), parseInt(hhmm[1],10), 0, 0); }
@@ -860,6 +864,10 @@ const HomePage = () => {
                   // Normalize to numeric timestamp for robust axis scaling
                   const pts = (ts.points || []).map(p => {
                     if (r === '1D') {
+                      if (p.date) {
+                        const dt = new Date(p.date);
+                        return { xTs: dt.getTime(), price: p.price };
+                      }
                       const hhmm = (p.time ?? '').split(':');
                       const d = new Date();
                       if (hhmm.length >= 2) { d.setHours(parseInt(hhmm[0],10), parseInt(hhmm[1],10), 0, 0); }
