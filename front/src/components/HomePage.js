@@ -530,6 +530,27 @@ const HomePage = () => {
   const [overview, setOverview] = useState(null);
   const seriesCacheRef = useRef({}); // { '1D': [{x, price}], '1W': [...] }
 
+  // Local storage cache helpers (persist across reloads)
+  const loadFromStorage = (sym, r) => {
+    try {
+      const raw = localStorage.getItem(`sh:ts:${sym}:${r}`);
+      if (!raw) return null;
+      const js = JSON.parse(raw);
+      if (!js || !js.points || !js.exp) return null;
+      if (Date.now() > js.exp) return null;
+      return js.points;
+    } catch (_) { return null; }
+  };
+
+  const saveToStorage = (sym, r, points) => {
+    try {
+      // TTL per range: short for 1D, longer for long ranges
+      const ttlMs = r === '1D' ? 5*60*1000 : (['1W','1M','3M'].includes(r) ? 30*60*1000 : 12*60*60*1000);
+      const payload = { points, exp: Date.now() + ttlMs };
+      localStorage.setItem(`sh:ts:${sym}:${r}`, JSON.stringify(payload));
+    } catch (_) {}
+  };
+
   // Function to simulate loading progress for each model
   const simulateProgress = (modelIds) => {
     // Initialize progress for each model
@@ -614,15 +635,24 @@ const HomePage = () => {
         setOverview(ov);
       } catch (_) {}
       try {
-        const ts = await getTimeSeries(selectedSymbol, '1D');
-        const pts = (ts.points || []).map(p => ({ x: p.time ?? p.date, price: p.price }));
-        seriesCacheRef.current['1D'] = pts;
-        setSeries({ points: pts });
+        const cached = loadFromStorage(selectedSymbol, '1D');
+        if (cached && cached.length) {
+          seriesCacheRef.current['1D'] = cached;
+          setSeries({ points: cached });
+        } else {
+          const ts = await getTimeSeries(selectedSymbol, '1D');
+          const pts = (ts.points || []).map(p => ({ x: p.time ?? p.date, price: p.price }));
+          seriesCacheRef.current['1D'] = pts;
+          saveToStorage(selectedSymbol, '1D', pts);
+          setSeries({ points: pts });
+        }
         // prefetch a couple of common ranges in background
         ['1W','1M','3M'].forEach(async r => {
           try {
             const bg = await getTimeSeries(selectedSymbol, r);
-            seriesCacheRef.current[r] = (bg.points || []).map(p => ({ x: p.date ?? p.time, price: p.price }));
+            const mapped = (bg.points || []).map(p => ({ x: p.date ?? p.time, price: p.price }));
+            seriesCacheRef.current[r] = mapped;
+            saveToStorage(selectedSymbol, r, mapped);
           } catch (_) {}
         });
       } catch (_) {}
@@ -807,8 +837,15 @@ const HomePage = () => {
             {['1D','1W','1M','3M','6M','YTD','1Y','2Y','5Y','10Y'].map(r => (
               <RangeTab key={r} active={range === r} onClick={async () => {
                 setRange(r);
-                // serve from cache if present
-                const cached = seriesCacheRef.current[r];
+                // serve from in-memory cache first
+                let cached = seriesCacheRef.current[r];
+                if (!cached || !cached.length) {
+                  // try localStorage
+                  cached = loadFromStorage(selectedSymbol, r);
+                  if (cached && cached.length) {
+                    seriesCacheRef.current[r] = cached;
+                  }
+                }
                 if (cached && cached.length) {
                   setSeries({ points: cached });
                   return;
@@ -817,6 +854,7 @@ const HomePage = () => {
                   const ts = await getTimeSeries(selectedSymbol, r);
                   const pts = (ts.points || []).map(p => ({ x: p.date ?? p.time, price: p.price }));
                   seriesCacheRef.current[r] = pts;
+                  saveToStorage(selectedSymbol, r, pts);
                   setSeries({ points: pts });
                 } catch (_) {}
               }}>{r}</RangeTab>
@@ -824,8 +862,8 @@ const HomePage = () => {
           </RangeTabs>
           <div style={{ height: 220 }}>
             {series && series.points && series.points.length >= 2 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={series.points} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+              <ResponsiveContainer width="100%" height="100%" key={range}>
+                <AreaChart data={series.points} margin={{ top: 8, right: 16, left: 0, bottom: 0 }} key={range}>
                   <defs>
                     <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#34C759" stopOpacity={0.4} />
