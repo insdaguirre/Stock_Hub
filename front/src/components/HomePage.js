@@ -625,46 +625,7 @@ const HomePage = () => {
       setApiLatencyMs(Math.max(1, Math.round(t1 - t0)));
       setLastUpdated(new Date());
       setPredictionsData(data);
-      // Fetch intraday chart after predictions resolve
-      try {
-        const intr = await getIntraday(selectedSymbol);
-        setIntraday(intr);
-      } catch (_) { /* ignore chart failure */ }
-      try {
-        const ov = await getOverview(selectedSymbol);
-        setOverview(ov);
-      } catch (_) {}
-      try {
-        const cached = loadFromStorage(selectedSymbol, '1D');
-        if (cached && cached.length) {
-          seriesCacheRef.current['1D'] = cached;
-          setSeries({ points: cached });
-        } else {
-          const ts = await getTimeSeries(selectedSymbol, '1D');
-          const pts = (ts.points || []).map(p => {
-            if (p.date) {
-              const dt = new Date(p.date);
-              return { xTs: dt.getTime(), price: p.price };
-            }
-            const hhmm = (p.time ?? '').split(':');
-            const d = new Date();
-            if (hhmm.length >= 2) { d.setHours(parseInt(hhmm[0],10), parseInt(hhmm[1],10), 0, 0); }
-            return { xTs: d.getTime(), price: p.price };
-          });
-          seriesCacheRef.current['1D'] = pts;
-          saveToStorage(selectedSymbol, '1D', pts);
-          setSeries({ points: pts });
-        }
-        // prefetch a couple of common ranges in background
-        ['1W','1M','3M'].forEach(async r => {
-          try {
-            const bg = await getTimeSeries(selectedSymbol, r);
-            const mapped = (bg.points || []).map(p => ({ xTs: new Date(p.date ?? p.time).getTime(), price: p.price }));
-            seriesCacheRef.current[r] = mapped;
-            saveToStorage(selectedSymbol, r, mapped);
-          } catch (_) {}
-        });
-      } catch (_) {}
+      // Chart data is fetched separately on symbol change
       
       // Ensure we show 100% progress before stopping
       setLoadingProgress(prev => {
@@ -703,6 +664,58 @@ const HomePage = () => {
     const id = setInterval(ping, 60000);
     return () => { mounted = false; clearInterval(id); };
   }, []);
+
+  // Load intraday + overview + default 1D series whenever symbol changes
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const intr = await getIntraday(selectedSymbol);
+        if (!mounted) return;
+        setIntraday(intr);
+      } catch (_) {}
+      try {
+        const ov = await getOverview(selectedSymbol);
+        if (!mounted) return;
+        setOverview(ov);
+      } catch (_) {}
+      try {
+        const cached = loadFromStorage(selectedSymbol, '1D');
+        if (cached && cached.length) {
+          seriesCacheRef.current['1D'] = cached;
+          if (!mounted) return;
+          setSeries({ points: cached });
+        } else {
+          const ts = await getTimeSeries(selectedSymbol, '1D');
+          if (!mounted) return;
+          const pts = (ts.points || []).map(p => {
+            if (p.date) {
+              const dt = new Date(p.date);
+              return { xTs: dt.getTime(), price: p.price };
+            }
+            const hhmm = (p.time ?? '').split(':');
+            const d = new Date();
+            if (hhmm.length >= 2) { d.setHours(parseInt(hhmm[0],10), parseInt(hhmm[1],10), 0, 0); }
+            return { xTs: d.getTime(), price: p.price };
+          });
+          seriesCacheRef.current['1D'] = pts;
+          saveToStorage(selectedSymbol, '1D', pts);
+          setSeries({ points: pts });
+        }
+        // background prefetch
+        ['1W','1M','3M'].forEach(async r => {
+          try {
+            const bg = await getTimeSeries(selectedSymbol, r);
+            const mapped = (bg.points || []).map(p => ({ xTs: new Date(p.date ?? p.time).getTime(), price: p.price }));
+            seriesCacheRef.current[r] = mapped;
+            saveToStorage(selectedSymbol, r, mapped);
+          } catch (_) {}
+        });
+      } catch (_) {}
+    };
+    load();
+    return () => { mounted = false; };
+  }, [selectedSymbol]);
 
   const handleSearch = (e) => {
     setSearchTerm(e.target.value);
@@ -808,35 +821,8 @@ const HomePage = () => {
         ))}
       </NewsGrid>
       
-      {/* Predict Section */}
-      <div style={{ fontSize: 18, fontWeight: 600, margin: '8px 0 8px 2px' }}>Predict</div>
-      <SearchInput
-        type="text"
-        placeholder="Enter stock symbol (e.g., AAPL, MSFT, GOOGL)"
-        value={searchTerm}
-        onChange={handleSearch}
-        onKeyDown={(e) => { if (e.key === 'Enter') { fetchPredictions(); } }}
-      />
-      
-      <StockSelector>
-        <StockSelectorTitle>Selected Symbol: {selectedSymbol}</StockSelectorTitle>
-        <SearchInput
-          type="button"
-          value={loading ? 'Getting Predictions…' : 'Get Predictions'}
-          onClick={fetchPredictions}
-          disabled={loading}
-          style={{ 
-            backgroundColor: loading ? '#0a5fd1' : '#0A84FF',
-            color: 'white',
-            fontWeight: 'bold',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            opacity: loading ? 0.9 : 1
-          }}
-        />
-      </StockSelector>
-
-      {/* Intraday Chart after predictions */}
-      {predictionsData && intraday && (
+      {/* Intraday Chart Section (moved above Predict) */}
+      {intraday && (
         <IntradayCard>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <div style={{ fontWeight: 600 }}>Intraday • {selectedSymbol}</div>
@@ -979,6 +965,33 @@ const HomePage = () => {
           )}
         </IntradayCard>
       )}
+
+      {/* Predict Section (moved below chart) */}
+      <div style={{ fontSize: 18, fontWeight: 600, margin: '8px 0 8px 2px' }}>Predict</div>
+      <SearchInput
+        type="text"
+        placeholder="Enter stock symbol (e.g., AAPL, MSFT, GOOGL)"
+        value={searchTerm}
+        onChange={handleSearch}
+        onKeyDown={(e) => { if (e.key === 'Enter') { fetchPredictions(); } }}
+      />
+      
+      <StockSelector>
+        <StockSelectorTitle>Selected Symbol: {selectedSymbol}</StockSelectorTitle>
+        <SearchInput
+          type="button"
+          value={loading ? 'Getting Predictions…' : 'Get Predictions'}
+          onClick={fetchPredictions}
+          disabled={loading}
+          style={{ 
+            backgroundColor: loading ? '#0a5fd1' : '#0A84FF',
+            color: 'white',
+            fontWeight: 'bold',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            opacity: loading ? 0.9 : 1
+          }}
+        />
+      </StockSelector>
 
       {loading && (
         <LoadingContainer>
