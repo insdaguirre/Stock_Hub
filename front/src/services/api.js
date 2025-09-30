@@ -280,3 +280,13 @@ export const getApiStatus = async () => {
     return { redis: 'err', queue: 'err', storage: 'err' };
   }
 };
+
+// Fetch latest news, optional symbol filter; backend caches for 12h
+export const getNews = async (symbol, limit = 6) => {
+  const url = symbol ? `${BASE_URL}/news?symbol=${encodeURIComponent(symbol)}` : `${BASE_URL}/news`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('failed to fetch news');
+  const js = await r.json();
+  const articles = (js.articles || []).slice(0, limit);
+  return articles;
+};

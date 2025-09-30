@@ -69,6 +69,7 @@ logging.basicConfig(level=logging.INFO)
 ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY')
 MODEL_VERSION = os.getenv('MODEL_VERSION', 'v1')
 ADMIN_API_KEY = os.getenv('ADMIN_API_KEY')
+FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY')
 
 # Redis
 REDIS_URL = os.getenv('REDIS_URL')
@@ -149,6 +150,131 @@ def _request_with_backoff(url, max_retries=3):
     if isinstance(last_err, HTTPException):
         raise last_err
     raise HTTPException(status_code=502, detail=str(last_err) if last_err else 'Upstream error')
+
+
+def _standardize_articles(items):
+    """Map provider-specific items into a standard article dict shape.
+    Expected return list entries:
+    { id, title, source, url, imageUrl, publishedAt, summary }
+    """
+    cleaned = []
+    for it in items:
+        # ensure minimal required fields
+        if not it.get('title') or not it.get('url'):
+            continue
+        cleaned.append({
+            "id": it.get('id') or hashlib.md5((it.get('url') or it.get('title')).encode('utf-8')).hexdigest(),
+            "title": it.get('title'),
+            "source": it.get('source') or 'unknown',
+            "url": it.get('url'),
+            "imageUrl": it.get('imageUrl') or '',
+            "publishedAt": it.get('publishedAt') or datetime.utcnow().isoformat() + 'Z',
+            "summary": it.get('summary') or ''
+        })
+    # sort newest first
+    try:
+        cleaned.sort(key=lambda x: x.get('publishedAt', ''), reverse=True)
+    except Exception:
+        pass
+    return cleaned
+
+
+def _fetch_news_finnhub(symbol: str | None = None, limit: int = 6):
+    if not FINNHUB_API_KEY:
+        return []
+    try:
+        if symbol:
+            # company news for last 14 days
+            today = datetime.utcnow().date()
+            frm = (today - timedelta(days=14)).isoformat()
+            to = today.isoformat()
+            url = f"https://finnhub.io/api/v1/company-news?symbol={symbol.upper()}&from={frm}&to={to}&token={FINNHUB_API_KEY}"
+            data = requests.get(url, timeout=15).json()
+        else:
+            url = f"https://finnhub.io/api/v1/news?category=general&token={FINNHUB_API_KEY}"
+            data = requests.get(url, timeout=15).json()
+        items = []
+        for d in data[: max(20, limit)]:
+            items.append({
+                "id": str(d.get('id') or d.get('datetime') or ''),
+                "title": d.get('headline'),
+                "source": d.get('source'),
+                "url": d.get('url'),
+                "imageUrl": d.get('image'),
+                "publishedAt": datetime.utcfromtimestamp(int(d.get('datetime', 0))).isoformat() + 'Z' if d.get('datetime') else None,
+                "summary": d.get('summary')
+            })
+        return _standardize_articles(items)[:limit]
+    except Exception:
+        return []
+
+
+def _fetch_news_alphavantage(symbol: str | None = None, limit: int = 6):
+    if not ALPHA_VANTAGE_API_KEY:
+        return []
+    try:
+        base = "https://www.alphavantage.co/query?function=NEWS_SENTIMENT"
+        params = []
+        if symbol:
+            params.append(f"tickers={symbol.upper()}")
+        else:
+            # general market topics
+            params.append("topics=financial_markets,earnings,technology,ipo")
+        params.append("sort=LATEST")
+        params.append(f"apikey={ALPHA_VANTAGE_API_KEY}")
+        params.append("limit=50")
+        url = base + "&" + "&".join(params)
+        data = _request_with_backoff(url)
+        feed = data.get('feed', []) if isinstance(data, dict) else []
+        items = []
+        for f in feed:
+            # Alpha Vantage time like 20250101T120000
+            tp = f.get('time_published')
+            iso = None
+            if tp and len(tp) >= 8:
+                try:
+                    iso = datetime.strptime(tp[:15], "%Y%m%dT%H%M%S").isoformat() + 'Z'
+                except Exception:
+                    try:
+                        iso = datetime.strptime(tp[:13], "%Y%m%dT%H%M").isoformat() + 'Z'
+                    except Exception:
+                        iso = None
+            items.append({
+                "id": f.get('guid') or f.get('title'),
+                "title": f.get('title'),
+                "source": f.get('source'),
+                "url": f.get('url'),
+                "imageUrl": f.get('banner_image'),
+                "publishedAt": iso,
+                "summary": f.get('summary')
+            })
+        return _standardize_articles(items)[:limit]
+    except Exception:
+        return []
+
+
+def fetch_news(symbol: str | None = None, limit: int = 6):
+    """Try multiple providers and return up to limit standardized articles."""
+    # Provider priority: Finnhub -> Alpha Vantage
+    articles = []
+    try:
+        articles = _fetch_news_finnhub(symbol, limit)
+    except Exception:
+        articles = []
+    if len(articles) < limit:
+        try:
+            extra = _fetch_news_alphavantage(symbol, limit)
+            # merge de-duplicating by url
+            seen = {a['url'] for a in articles}
+            for a in extra:
+                if a['url'] not in seen:
+                    articles.append(a)
+                    seen.add(a['url'])
+                if len(articles) >= limit:
+                    break
+        except Exception:
+            pass
+    return articles[:limit]
 
 def fetch_stock_data(symbol):
     """Fetch historical stock data from Alpha Vantage."""
@@ -394,6 +520,32 @@ async def precompute(symbols: str, api_key: Optional[str] = None):
 async def metrics():
     data = generate_latest()
     return Response(content=data, media_type=CONTENT_TYPE_LATEST)
+
+
+@app.get("/api/news")
+async def get_news(symbol: Optional[str] = None, limit: int = 6):
+    """Return up to 6 recent market or symbol-specific news articles.
+    Results cached in Redis for 12 hours.
+    """
+    started = time.perf_counter()
+    key = f"news:{'symbol:'+symbol.upper() if symbol else 'market'}:v1"
+    cached = _cache_get(key)
+    if cached:
+        try:
+            js = json.loads(cached)
+            print(json.dumps({"route": "/api/news", "symbol": symbol or "_market", "cache_hit": True, "status": 200, "latency_ms": int((time.perf_counter()-started)*1000)}))
+            REQUEST_COUNT.labels(route='/api/news', status='200').inc()
+            return js
+        except Exception:
+            pass
+
+    articles = fetch_news(symbol, limit=limit)
+    result = {"articles": articles, "refreshedAt": datetime.utcnow().isoformat() + 'Z'}
+    # 12 hours TTL
+    _cache_set(key, json.dumps(result), ttl_seconds=12 * 60 * 60)
+    print(json.dumps({"route": "/api/news", "symbol": symbol or "_market", "cache_hit": False, "status": 200, "latency_ms": int((time.perf_counter()-started)*1000)}))
+    REQUEST_COUNT.labels(route='/api/news', status='200').inc()
+    return result
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000) 

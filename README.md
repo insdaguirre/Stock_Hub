@@ -226,6 +226,72 @@ Steps:
 - Uses `getPredictions`, `getStockData`, and job polling via `/api/jobs/:id`
 - Configures base URL via `REACT_APP_API_BASE_URL` or auto-inferring
 
+### News cards (new)
+
+Home displays six news cards above the Predict section. Clicking a card opens the article in a new tab. News refreshes every 12 hours via a cached backend endpoint.
+
+Data flow:
+
+- Frontend calls `GET /api/news` on load → receives `{ articles: [{ id,title,source,url,imageUrl,publishedAt,summary }], refreshedAt }`.
+- Backend fetches from providers in priority order and caches the normalized result in Redis for 12h:
+  - Finnhub: `company-news` when `symbol` is provided; general `news?category=general` otherwise.
+  - Alpha Vantage News Sentiment as fallback.
+
+Optional query `symbol` filters for a ticker: `/api/news?symbol=AAPL`.
+
+Environment variables for providers:
+
+- `FINNHUB_API_KEY` (optional but recommended for richer images and timely coverage)
+- `ALPHA_VANTAGE_API_KEY` (already used; doubles as news fallback)
+
+No keys present → endpoint returns an empty array gracefully.
+
+Frontend integration points:
+
+- `front/src/services/api.js`: `getNews(symbol?, limit=6)`
+- `front/src/components/HomePage.js`: renders news grid, shows Predict input, hides model list until predictions are fetched.
+
+### Configure on Railway
+
+1. In Railway variables, add:
+   - `FINNHUB_API_KEY=<your_key>` (optional)
+   - `ALPHA_VANTAGE_API_KEY=<your_key>`
+   - Ensure `REDIS_URL` is set.
+2. Deploy. `/api/news` will populate and cache for 12 hours.
+
+### Local development
+
+```
+export ALPHA_VANTAGE_API_KEY=xxx
+export FINNHUB_API_KEY=yyy   # optional
+export REDIS_URL=redis://localhost:6379
+uvicorn app:app --reload
+```
+Frontend:
+
+```
+cd front
+npm start
+```
+
+`front/src/services/api.js` points to `http://localhost:8000/api` when not on GitHub Pages.
+
+### Testing the integration
+
+1. Start the API and Redis locally, or deploy to Railway.
+2. Hit the endpoint directly:
+   - `curl "$API_BASE/api/news" | jq .`
+   - `curl "$API_BASE/api/news?symbol=AAPL" | jq .`
+3. In the UI, load the home page:
+   - Verify six cards render with titles, sources, and times.
+   - Click a card to open a new tab at the article URL.
+4. Enter a ticker under Predict and click Get Predictions:
+   - Model progress displays, then model rows appear with values.
+
+Cache verification:
+
+- First `/api/news` call logs `cache_hit: False`; subsequent calls within 12 hours log `cache_hit: True`.
+
 ---
 
 ## Future Updates

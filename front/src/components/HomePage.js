@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
-import { getPredictions, BASE_URL, getApiStatus } from '../services/api';
+import { getPredictions, BASE_URL, getApiStatus, getNews } from '../services/api';
 import ProgressBar from './ProgressBar';
 
 const Container = styled.div`
@@ -31,6 +31,59 @@ const DateText = styled.h2`
   color: #666;
   margin: 5px 0 15px 0;
   font-weight: normal;
+`;
+
+const NewsGrid = styled.div`
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 8px;
+  margin-bottom: 22px;
+
+  @media (min-width: 640px) {
+    grid-template-columns: 1fr 1fr;
+  }
+`;
+
+const NewsCard = styled.a`
+  display: flex;
+  background: #1C1C1E;
+  border-radius: 12px;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  transition: transform .15s ease, background-color .15s ease;
+  cursor: pointer;
+
+  &:hover { transform: translateY(-2px); background-color: #2C2C2E; }
+`;
+
+const NewsImage = styled.div`
+  width: 38%;
+  min-height: 110px;
+  background-size: cover;
+  background-position: center;
+  background-color: #000; /* fallback */
+`;
+
+const NewsBody = styled.div`
+  flex: 1;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+`;
+
+const NewsTitle = styled.div`
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 6px;
+`;
+
+const NewsMeta = styled.div`
+  font-size: 12px;
+  color: #8e8e93;
 `;
 
 const SearchInput = styled.input`
@@ -324,6 +377,8 @@ const HomePage = () => {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [apiStatus, setApiStatus] = useState('unknown');
   const [storageStatus, setStorageStatus] = useState('unknown');
+  const [articles, setArticles] = useState([]);
+  const [newsError, setNewsError] = useState(null);
 
   // Function to simulate loading progress for each model
   const simulateProgress = (modelIds) => {
@@ -467,13 +522,48 @@ const HomePage = () => {
   // Only show first 5 models that we've implemented
   const implementedModels = models.slice(0, 5);
 
+  // Fetch news on mount and every 12 hours
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const items = await getNews(null, 6);
+        if (!mounted) return;
+        setArticles(items);
+        setNewsError(null);
+      } catch (e) {
+        if (!mounted) return;
+        setNewsError('Failed to load news');
+      }
+    };
+    load();
+    const id = setInterval(load, 12 * 60 * 60 * 1000);
+    return () => { mounted = false; clearInterval(id); };
+  }, []);
+
   return (
     <Container>
       <Header>
         <Title>Stock Hub</Title>
         <DateText>{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</DateText>
       </Header>
+
+      {/* News Section */}
+      {newsError && <ErrorMessage>{newsError}</ErrorMessage>}
+      <NewsGrid>
+        {articles.slice(0,6).map((a) => (
+          <NewsCard key={a.id} href={a.url} target="_blank" rel="noopener noreferrer">
+            <NewsImage style={{ backgroundImage: a.imageUrl ? `url(${a.imageUrl})` : 'none' }} />
+            <NewsBody>
+              <NewsTitle>{a.title}</NewsTitle>
+              <NewsMeta>{a.source} • {new Date(a.publishedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</NewsMeta>
+            </NewsBody>
+          </NewsCard>
+        ))}
+      </NewsGrid>
       
+      {/* Predict Section */}
+      <div style={{ fontSize: 18, fontWeight: 600, margin: '8px 0 8px 2px' }}>Predict</div>
       <SearchInput
         type="text"
         placeholder="Enter stock symbol (e.g., AAPL, MSFT, GOOGL)"
@@ -535,7 +625,8 @@ const HomePage = () => {
 
       {error && <ErrorMessage>{error}</ErrorMessage>}
 
-      {selectedSymbol && (
+      {/* Models only show after user triggers predictions */}
+      {predictionsData && (
         <ModelsList style={{ position: 'relative' }}>
           {loading && <LoadingOverlay>Loading predictions...</LoadingOverlay>}
           {implementedModels.map(model => {
