@@ -691,6 +691,133 @@ async def get_intraday(symbol: str):
     except Exception as e:
         REQUEST_COUNT.labels(route='/api/intraday', status='500').inc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _compute_start_date(range_key: str, now_dt: datetime) -> datetime:
+    if range_key == '1D':
+        return now_dt
+    if range_key == '1W':
+        return now_dt - timedelta(days=7)
+    if range_key == '1M':
+        return now_dt - timedelta(days=31)
+    if range_key == '3M':
+        return now_dt - timedelta(days=93)
+    if range_key == '6M':
+        return now_dt - timedelta(days=186)
+    if range_key == 'YTD':
+        return now_dt.replace(month=1, day=1)
+    if range_key == '1Y':
+        return now_dt - timedelta(days=365)
+    if range_key == '2Y':
+        return now_dt - timedelta(days=365*2)
+    if range_key == '5Y':
+        return now_dt - timedelta(days=365*5)
+    if range_key == '10Y':
+        return now_dt - timedelta(days=365*10)
+    return now_dt - timedelta(days=365*20)
+
+
+@app.get("/api/timeseries/{symbol}")
+async def get_timeseries(symbol: str, range: str = '1M'):
+    """Return timeseries for charting. 1D uses intraday; others use daily prices.
+    Response: { points: [{date, price}], range }
+    """
+    try:
+        et = ZoneInfo('America/New_York')
+        now_et = datetime.now(et)
+        if range == '1D':
+            intr = fetch_intraday(symbol)
+            return {"points": intr.get('points', []), "range": '1D'}
+        data = fetch_stock_data(symbol)
+        start = _compute_start_date(range, now_et)
+        # data is ascending by date
+        pts = [p for p in data if datetime.strptime(p['date'], '%Y-%m-%d') >= start]
+        return {"points": pts, "range": range}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _format_number(n):
+    try:
+        n = float(n)
+    except Exception:
+        return None
+    return n
+
+
+def fetch_overview(symbol: str):
+    """Get snapshot stats for the symbol.
+    Prefers Finnhub metrics + quote; falls back to Alpha Vantage OVERVIEW + GLOBAL_QUOTE.
+    Returns dictionary with common fields.
+    """
+    # Finnhub path
+    if FINNHUB_API_KEY:
+        try:
+            prof = requests.get(f"https://finnhub.io/api/v1/stock/profile2?symbol={symbol.upper()}&token={FINNHUB_API_KEY}", timeout=12).json()
+        except Exception:
+            prof = {}
+        try:
+            met = requests.get(f"https://finnhub.io/api/v1/stock/metric?symbol={symbol.upper()}&metric=all&token={FINNHUB_API_KEY}", timeout=12).json()
+        except Exception:
+            met = {}
+        try:
+            q = requests.get(f"https://finnhub.io/api/v1/quote?symbol={symbol.upper()}&token={FINNHUB_API_KEY}", timeout=12).json()
+        except Exception:
+            q = {}
+        metrics = met.get('metric', {}) if isinstance(met, dict) else {}
+        result = {
+            "marketCap": _format_number(metrics.get('marketCapitalization')),
+            "pe": _format_number(metrics.get('peBasicExclExtraTTM') or metrics.get('peTTM')),
+            "eps": _format_number(metrics.get('epsBasicExclExtraItemsTTM') or metrics.get('epsTTM')),
+            "beta": _format_number(metrics.get('beta')),
+            "dividendYield": _format_number(metrics.get('dividendYieldIndicatedAnnual')),
+            "fiftyTwoWeekHigh": _format_number(metrics.get('52WeekHigh')),
+            "fiftyTwoWeekLow": _format_number(metrics.get('52WeekLow')),
+            "open": _format_number(q.get('o')),
+            "high": _format_number(q.get('h')),
+            "low": _format_number(q.get('l')),
+            "prevClose": _format_number(q.get('pc')),
+            "volume": _format_number(metrics.get('volume')) or _format_number(q.get('v')),
+            "name": prof.get('name') or symbol.upper(),
+            "currency": prof.get('currency') or 'USD'
+        }
+        if any(v is not None for v in result.values()):
+            return result
+    # Alpha Vantage fallback
+    ov = {}
+    try:
+        ov = _request_with_backoff(f"https://www.alphavantage.co/query?function=OVERVIEW&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}")
+    except Exception:
+        ov = {}
+    price, prev_close = fetch_global_quote(symbol)
+    return {
+        "marketCap": _format_number(ov.get('MarketCapitalization')),
+        "pe": _format_number(ov.get('PERatio')),
+        "eps": _format_number(ov.get('EPS')),
+        "beta": _format_number(ov.get('Beta')),
+        "dividendYield": _format_number(ov.get('DividendYield')),
+        "fiftyTwoWeekHigh": _format_number(ov.get('52WeekHigh')),
+        "fiftyTwoWeekLow": _format_number(ov.get('52WeekLow')),
+        "open": None,
+        "high": None,
+        "low": None,
+        "prevClose": prev_close,
+        "volume": _format_number(ov.get('SharesOutstanding')),
+        "name": ov.get('Name') or symbol.upper(),
+        "currency": ov.get('Currency') or 'USD'
+    }
+
+
+@app.get("/api/overview/{symbol}")
+async def get_overview(symbol: str):
+    try:
+        return fetch_overview(symbol)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000) 

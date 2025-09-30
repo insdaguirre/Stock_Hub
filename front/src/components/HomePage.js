@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
-import { getPredictions, BASE_URL, getApiStatus, getNews, getIntraday } from '../services/api';
+import { getPredictions, BASE_URL, getApiStatus, getNews, getIntraday, getTimeSeries, getOverview } from '../services/api';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import ProgressBar from './ProgressBar';
 
@@ -261,6 +261,46 @@ const IntradayCard = styled.div`
   border: 1px solid #1F1F20;
 `;
 
+const RangeTabs = styled.div`
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+`;
+
+const RangeTab = styled.button`
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid ${props => props.active ? '#0A84FF' : '#2A2A2C'};
+  background: ${props => props.active ? '#0A84FF' : '#1F1F20'};
+  color: ${props => props.active ? 'white' : '#C7C7CC'};
+  cursor: pointer;
+  font-size: 12px;
+`;
+
+const StatsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+`;
+
+const StatCard = styled.div`
+  background: #111113;
+  border: 1px solid #1F1F20;
+  border-radius: 8px;
+  padding: 8px 10px;
+`;
+
+const StatLabel = styled.div`
+  font-size: 11px;
+  color: #8e8e93;
+`;
+
+const StatValue = styled.div`
+  font-size: 14px;
+  color: #fff;
+`;
+
 const LoadingOverlay = styled.div`
   position: absolute;
   top: 0;
@@ -485,6 +525,9 @@ const HomePage = () => {
   const [newsError, setNewsError] = useState(null);
   const [newsLoading, setNewsLoading] = useState(true);
   const [intraday, setIntraday] = useState(null);
+  const [range, setRange] = useState('1D');
+  const [series, setSeries] = useState(null);
+  const [overview, setOverview] = useState(null);
 
   // Function to simulate loading progress for each model
   const simulateProgress = (modelIds) => {
@@ -565,6 +608,14 @@ const HomePage = () => {
         const intr = await getIntraday(selectedSymbol);
         setIntraday(intr);
       } catch (_) { /* ignore chart failure */ }
+      try {
+        const ov = await getOverview(selectedSymbol);
+        setOverview(ov);
+      } catch (_) {}
+      try {
+        const ts = await getTimeSeries(selectedSymbol, '1D');
+        setSeries(ts);
+      } catch (_) {}
       
       // Ensure we show 100% progress before stopping
       setLoadingProgress(prev => {
@@ -742,10 +793,21 @@ const HomePage = () => {
             <div style={{ fontWeight: 600 }}>Intraday • {selectedSymbol}</div>
             <div style={{ color: '#8e8e93', fontSize: 12 }}>{intraday.market === 'open' ? 'Market open' : 'Market closed'} • as of {new Date(intraday.asOf).toLocaleTimeString()}</div>
           </div>
+          <RangeTabs>
+            {['1D','1W','1M','3M','6M','YTD','1Y','2Y','5Y','10Y'].map(r => (
+              <RangeTab key={r} active={range === r} onClick={async () => {
+                setRange(r);
+                try {
+                  const ts = await getTimeSeries(selectedSymbol, r);
+                  setSeries(ts);
+                } catch (_) {}
+              }}>{r}</RangeTab>
+            ))}
+          </RangeTabs>
           <div style={{ height: 220 }}>
-            {intraday.points && intraday.points.length >= 2 ? (
+            {series && series.points && series.points.length >= 2 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={intraday.points} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                <AreaChart data={series.points} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#34C759" stopOpacity={0.4} />
@@ -753,8 +815,8 @@ const HomePage = () => {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1f1f20" />
-                  <XAxis dataKey="time" tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={30} />
-                  <YAxis tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} domain={['auto','auto']} />
+                  <XAxis dataKey={range==='1D' ? 'time' : 'date'} tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={30} />
+                  <YAxis dataKey="price" tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} domain={['auto','auto']} />
                   <Tooltip contentStyle={{ background: '#111113', border: '1px solid #1F1F20', color: '#fff' }} labelStyle={{ color: '#C7C7CC' }} />
                   <Area type="monotone" dataKey="price" stroke="#34C759" fill="url(#grad)" strokeWidth={2} />
                 </AreaChart>
@@ -765,6 +827,54 @@ const HomePage = () => {
               </div>
             )}
           </div>
+          {overview && (
+            <StatsGrid>
+              <StatCard>
+                <StatLabel>Open</StatLabel>
+                <StatValue>{overview.open ? `$${overview.open.toFixed(2)}` : '—'}</StatValue>
+              </StatCard>
+              <StatCard>
+                <StatLabel>High</StatLabel>
+                <StatValue>{overview.high ? `$${overview.high.toFixed(2)}` : '—'}</StatValue>
+              </StatCard>
+              <StatCard>
+                <StatLabel>Low</StatLabel>
+                <StatValue>{overview.low ? `$${overview.low.toFixed(2)}` : '—'}</StatValue>
+              </StatCard>
+              <StatCard>
+                <StatLabel>Prev Close</StatLabel>
+                <StatValue>{overview.prevClose ? `$${overview.prevClose.toFixed(2)}` : '—'}</StatValue>
+              </StatCard>
+              <StatCard>
+                <StatLabel>52W High</StatLabel>
+                <StatValue>{overview.fiftyTwoWeekHigh ? `$${overview.fiftyTwoWeekHigh.toFixed(2)}` : '—'}</StatValue>
+              </StatCard>
+              <StatCard>
+                <StatLabel>52W Low</StatLabel>
+                <StatValue>{overview.fiftyTwoWeekLow ? `$${overview.fiftyTwoWeekLow.toFixed(2)}` : '—'}</StatValue>
+              </StatCard>
+              <StatCard>
+                <StatLabel>Market Cap</StatLabel>
+                <StatValue>{overview.marketCap ? `${(overview.marketCap/1e9).toFixed(1)}B` : '—'}</StatValue>
+              </StatCard>
+              <StatCard>
+                <StatLabel>P/E</StatLabel>
+                <StatValue>{overview.pe ? overview.pe.toFixed(2) : '—'}</StatValue>
+              </StatCard>
+              <StatCard>
+                <StatLabel>EPS</StatLabel>
+                <StatValue>{overview.eps ? overview.eps.toFixed(2) : '—'}</StatValue>
+              </StatCard>
+              <StatCard>
+                <StatLabel>Yield</StatLabel>
+                <StatValue>{overview.dividendYield ? `${(overview.dividendYield*100).toFixed(2)}%` : '—'}</StatValue>
+              </StatCard>
+              <StatCard>
+                <StatLabel>Beta</StatLabel>
+                <StatValue>{overview.beta ? overview.beta.toFixed(2) : '—'}</StatValue>
+              </StatCard>
+            </StatsGrid>
+          )}
         </IntradayCard>
       )}
 

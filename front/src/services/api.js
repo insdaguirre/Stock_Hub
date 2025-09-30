@@ -297,3 +297,15 @@ export const getIntraday = async (symbol) => {
   if (!r.ok) throw new Error('failed to fetch intraday');
   return await r.json();
 };
+
+export const getTimeSeries = async (symbol, range = '1M') => {
+  const r = await fetch(`${BASE_URL}/timeseries/${symbol}?range=${encodeURIComponent(range)}`);
+  if (!r.ok) throw new Error('failed to fetch timeseries');
+  return await r.json();
+};
+
+export const getOverview = async (symbol) => {
+  const r = await fetch(`${BASE_URL}/overview/${symbol}`);
+  if (!r.ok) throw new Error('failed to fetch overview');
+  return await r.json();
+};
