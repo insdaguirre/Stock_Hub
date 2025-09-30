@@ -728,9 +728,45 @@ async def get_timeseries(symbol: str, range: str = '1M'):
         if range == '1D':
             intr = fetch_intraday(symbol)
             return {"points": intr.get('points', []), "range": '1D'}
-        data = fetch_stock_data(symbol)
+
+        # Prefer Finnhub candles for broader ranges to avoid AV rate limits
+        def finnhub_candles(start_dt: datetime, end_dt: datetime, resolution: str):
+            if not FINNHUB_API_KEY:
+                return None
+            try:
+                url = (
+                    f"https://finnhub.io/api/v1/stock/candle?symbol={symbol.upper()}"
+                    f"&resolution={resolution}&from={int(start_dt.timestamp())}&to={int(end_dt.timestamp())}&token={FINNHUB_API_KEY}"
+                )
+                js = requests.get(url, timeout=15).json()
+                if js.get('s') != 'ok':
+                    return None
+                times = js.get('t') or []
+                closes = js.get('c') or []
+                out = []
+                for ts_i, c_i in zip(times, closes):
+                    dt = datetime.fromtimestamp(int(ts_i), tz=et)
+                    out.append({"date": dt.strftime('%Y-%m-%d'), "price": float(c_i)})
+                return out
+            except Exception:
+                return None
+
         start = _compute_start_date(range, now_et)
-        # data is ascending by date
+        total_days = (now_et.date() - start.date()).days
+        # Choose a reasonable resolution
+        if total_days <= 7:
+            res = '30'  # 30-minute buckets
+        elif total_days <= 31:
+            res = '60'  # hourly
+        else:
+            res = 'D'
+
+        fh = finnhub_candles(start, now_et, res)
+        if fh is not None and len(fh) >= 2:
+            return {"points": fh, "range": range}
+
+        # Fallback to Alpha Vantage daily when Finnhub unavailable
+        data = fetch_stock_data(symbol)
         pts = [p for p in data if datetime.strptime(p['date'], '%Y-%m-%d') >= start]
         return {"points": pts, "range": range}
     except HTTPException:

@@ -865,7 +865,9 @@ const HomePage = () => {
                       if (hhmm.length >= 2) { d.setHours(parseInt(hhmm[0],10), parseInt(hhmm[1],10), 0, 0); }
                       return { xTs: d.getTime(), price: p.price };
                     }
-                    return { xTs: new Date(p.date ?? p.time).getTime(), price: p.price };
+                    // p.date may be string 'YYYY-MM-DD' or an ISO string; normalize
+                    const dt = p.date ? new Date(p.date) : (p.time ? new Date(p.time) : new Date());
+                    return { xTs: dt.getTime(), price: p.price };
                   });
                   seriesCacheRef.current[r] = pts;
                   saveToStorage(selectedSymbol, r, pts);
