@@ -754,12 +754,13 @@ async def get_timeseries(symbol: str, range: str = '1M'):
         start = _compute_start_date(range, now_et)
         # Choose efficient resolutions per range
         def map_resolution(rk: str) -> str:
-            if rk in ['1W', '1M', '3M']:
-                return 'D'    # daily for up to 3 months
-            if rk in ['6M', 'YTD', '1Y', '2Y']:
-                return 'W'    # weekly for 6m–2y
-            if rk in ['5Y', '10Y']:
-                return 'M'    # monthly for long ranges
+            # Favor daily for up to 1Y to ensure density; aggregate farther out
+            if rk in ['1W', '1M', '3M', '6M', 'YTD', '1Y']:
+                return 'D'    # daily up to 1Y
+            if rk in ['2Y', '5Y']:
+                return 'W'    # weekly for 2–5Y
+            if rk in ['10Y']:
+                return 'M'    # monthly for 10Y
             return 'D'
         res = map_resolution(range)
 
@@ -773,6 +774,21 @@ async def get_timeseries(symbol: str, range: str = '1M'):
             # Compare dates only (avoid tz-aware vs naive mismatch)
             start_date = start.date()
             pts = [p for p in data if datetime.strptime(p['date'], '%Y-%m-%d').date() >= start_date]
+            # If filtering produced too few points (e.g., API cache lag), take a sensible tail slice
+            if len(pts) < 2:
+                fallback_counts = {
+                    '1W': 7,
+                    '1M': 22,
+                    '3M': 66,
+                    '6M': 132,
+                    'YTD': 180,
+                    '1Y': 252,
+                    '2Y': 504,
+                    '5Y': 1260,
+                    '10Y': 2520,
+                }
+                n = fallback_counts.get(range, 60)
+                pts = data[-min(len(data), n):]
             return {"points": pts, "range": range}
         except Exception:
             # As a last resort, return an empty series so the UI doesn't explode
