@@ -1,5 +1,5 @@
 // src/components/HomePage.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { getPredictions, BASE_URL, getApiStatus, getNews, getIntraday, getTimeSeries, getOverview } from '../services/api';
@@ -528,6 +528,7 @@ const HomePage = () => {
   const [range, setRange] = useState('1D');
   const [series, setSeries] = useState(null);
   const [overview, setOverview] = useState(null);
+  const seriesCacheRef = useRef({}); // { '1D': [{x, price}], '1W': [...] }
 
   // Function to simulate loading progress for each model
   const simulateProgress = (modelIds) => {
@@ -614,7 +615,16 @@ const HomePage = () => {
       } catch (_) {}
       try {
         const ts = await getTimeSeries(selectedSymbol, '1D');
-        setSeries(ts);
+        const pts = (ts.points || []).map(p => ({ x: p.time ?? p.date, price: p.price }));
+        seriesCacheRef.current['1D'] = pts;
+        setSeries({ points: pts });
+        // prefetch a couple of common ranges in background
+        ['1W','1M','3M'].forEach(async r => {
+          try {
+            const bg = await getTimeSeries(selectedSymbol, r);
+            seriesCacheRef.current[r] = (bg.points || []).map(p => ({ x: p.date ?? p.time, price: p.price }));
+          } catch (_) {}
+        });
       } catch (_) {}
       
       // Ensure we show 100% progress before stopping
@@ -797,9 +807,17 @@ const HomePage = () => {
             {['1D','1W','1M','3M','6M','YTD','1Y','2Y','5Y','10Y'].map(r => (
               <RangeTab key={r} active={range === r} onClick={async () => {
                 setRange(r);
+                // serve from cache if present
+                const cached = seriesCacheRef.current[r];
+                if (cached && cached.length) {
+                  setSeries({ points: cached });
+                  return;
+                }
                 try {
                   const ts = await getTimeSeries(selectedSymbol, r);
-                  setSeries(ts);
+                  const pts = (ts.points || []).map(p => ({ x: p.date ?? p.time, price: p.price }));
+                  seriesCacheRef.current[r] = pts;
+                  setSeries({ points: pts });
                 } catch (_) {}
               }}>{r}</RangeTab>
             ))}
@@ -815,7 +833,7 @@ const HomePage = () => {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1f1f20" />
-                  <XAxis dataKey={range==='1D' ? 'time' : 'date'} tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={30} />
+                  <XAxis dataKey="x" tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={30} />
                   <YAxis dataKey="price" tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} domain={['auto','auto']} />
                   <Tooltip contentStyle={{ background: '#111113', border: '1px solid #1F1F20', color: '#fff' }} labelStyle={{ color: '#C7C7CC' }} />
                   <Area type="monotone" dataKey="price" stroke="#34C759" fill="url(#grad)" strokeWidth={2} />
