@@ -536,9 +536,21 @@ const HomePage = () => {
         setNewsError('Failed to load news');
       }
     };
+    const computeIntervalMs = () => {
+      const now = new Date();
+      const hour = now.getHours();
+      // Refresh hourly between 6:00–22:00 local time, otherwise every 2 hours
+      return (hour >= 6 && hour < 22) ? (60 * 60 * 1000) : (2 * 60 * 60 * 1000);
+    };
     load();
-    const id = setInterval(load, 12 * 60 * 60 * 1000);
-    return () => { mounted = false; clearInterval(id); };
+    let id = setInterval(load, computeIntervalMs());
+    // Re-evaluate cadence at the top of each hour
+    const topOfHourMs = (60 - new Date().getMinutes()) * 60 * 1000 - new Date().getSeconds() * 1000 - new Date().getMilliseconds();
+    const realign = setTimeout(() => {
+      clearInterval(id);
+      id = setInterval(load, computeIntervalMs());
+    }, Math.max(5_000, topOfHourMs));
+    return () => { mounted = false; clearInterval(id); clearTimeout(realign); };
   }, []);
 
   return (

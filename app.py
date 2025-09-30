@@ -541,8 +541,8 @@ async def get_news(symbol: Optional[str] = None, limit: int = 6):
 
     articles = fetch_news(symbol, limit=limit)
     result = {"articles": articles, "refreshedAt": datetime.utcnow().isoformat() + 'Z'}
-    # 12 hours TTL
-    _cache_set(key, json.dumps(result), ttl_seconds=12 * 60 * 60)
+    # Cache for 1 hour to allow frequent refresh without stressing providers
+    _cache_set(key, json.dumps(result), ttl_seconds=60 * 60)
     print(json.dumps({"route": "/api/news", "symbol": symbol or "_market", "cache_hit": False, "status": 200, "latency_ms": int((time.perf_counter()-started)*1000)}))
     REQUEST_COUNT.labels(route='/api/news', status='200').inc()
     return result
