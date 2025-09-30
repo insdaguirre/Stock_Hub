@@ -1,5 +1,4 @@
 // src/services/api.js
-const ALPHA_VANTAGE_API_KEY = process.env.REACT_APP_ALPHA_VANTAGE_API_KEY || 'YOUR_API_KEY_HERE';
 // Resolve API base URL at build/runtime. Prefer env; when hosted on GitHub Pages, fall back to Railway.
 const inferProdBase = () => {
   try {
