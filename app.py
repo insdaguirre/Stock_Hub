@@ -5,6 +5,7 @@ import requests
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import os
 from dotenv import load_dotenv
 import settings
@@ -344,6 +345,65 @@ def fetch_global_quote(symbol):
     print(json.dumps({"route": "av_quote", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000)}))
     return price, prev_close
 
+
+def fetch_intraday(symbol: str, interval: str = '1min'):
+    """Fetch today's intraday series (ET) and filter to regular session 09:30–16:00.
+    Returns a list of { time: 'HH:MM', price: float } sorted by time.
+    """
+    t0 = time.perf_counter()
+    cache_key = f"av:intraday:{interval}:{symbol}"
+    cached = _cache_get(cache_key)
+    if cached:
+        try:
+            payload = json.loads(cached)
+            print(json.dumps({"route": "av_intraday", "symbol": symbol, "cache_hit": True, "latency_ms": int((time.perf_counter()-t0)*1000)}))
+            return payload
+        except Exception:
+            pass
+
+    throttled = _throttle(f"intraday:{symbol}")
+
+    url = (
+        f"https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY"
+        f"&symbol={symbol}&interval={interval}&apikey={ALPHA_VANTAGE_API_KEY}&outputsize=compact"
+    )
+    data = _request_with_backoff(url)
+    AV_CALLS.labels(type='intraday').inc()
+    # Data key name depends on interval
+    key = f"Time Series ({interval})"
+    series = data.get(key, {}) if isinstance(data, dict) else {}
+
+    et = ZoneInfo('America/New_York')
+    now_et = datetime.now(et)
+    session_date = now_et.date()
+    open_time = datetime.combine(session_date, datetime.min.time(), et).replace(hour=9, minute=30)
+    close_time = datetime.combine(session_date, datetime.min.time(), et).replace(hour=16, minute=0)
+
+    points = []
+    for ts_str, values in series.items():
+        try:
+            # Alpha Vantage timestamps are in ET
+            ts = datetime.strptime(ts_str, '%Y-%m-%d %H:%M:%S').replace(tzinfo=et)
+        except Exception:
+            continue
+        if ts.date() != session_date:
+            continue
+        if ts < open_time or ts > close_time:
+            continue
+        try:
+            price = float(values.get('4. close') or values.get('1. open') or 0)
+        except Exception:
+            continue
+        points.append({"time": ts.strftime('%H:%M'), "price": price})
+
+    points = sorted(points, key=lambda x: x['time'])
+    state = 'open' if (now_et.weekday() < 5 and open_time <= now_et <= close_time) else 'closed'
+    result = {"points": points, "market": state, "asOf": now_et.isoformat()}
+    # Short cache as data moves intraday
+    _cache_set(cache_key, json.dumps(result), ttl_seconds=60)
+    print(json.dumps({"route": "av_intraday", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000)}))
+    return result
+
 def calculate_prediction(prices, days_ahead=1):
     """Simple prediction based on moving average and trend."""
     prices = np.array(prices)
@@ -546,6 +606,21 @@ async def get_news(symbol: Optional[str] = None, limit: int = 6):
     print(json.dumps({"route": "/api/news", "symbol": symbol or "_market", "cache_hit": False, "status": 200, "latency_ms": int((time.perf_counter()-started)*1000)}))
     REQUEST_COUNT.labels(route='/api/news', status='200').inc()
     return result
+
+
+@app.get("/api/intraday/{symbol}")
+async def get_intraday(symbol: str):
+    started = time.perf_counter()
+    try:
+        payload = fetch_intraday(symbol)
+        print(json.dumps({"route": "/api/intraday", "symbol": symbol, "status": 200, "latency_ms": int((time.perf_counter()-started)*1000)}))
+        REQUEST_COUNT.labels(route='/api/intraday', status='200').inc()
+        return payload
+    except HTTPException:
+        raise
+    except Exception as e:
+        REQUEST_COUNT.labels(route='/api/intraday', status='500').inc()
+        raise HTTPException(status_code=500, detail=str(e))
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000) 

@@ -290,3 +290,10 @@ export const getNews = async (symbol, limit = 6) => {
   const articles = (js.articles || []).slice(0, limit);
   return articles;
 };
+
+// Intraday chart data
+export const getIntraday = async (symbol) => {
+  const r = await fetch(`${BASE_URL}/intraday/${symbol}`);
+  if (!r.ok) throw new Error('failed to fetch intraday');
+  return await r.json();
+};

@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
-import { getPredictions, BASE_URL, getApiStatus, getNews } from '../services/api';
+import { getPredictions, BASE_URL, getApiStatus, getNews, getIntraday } from '../services/api';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import ProgressBar from './ProgressBar';
 
 const Container = styled.div`
@@ -20,14 +21,14 @@ const Header = styled.div`
 `;
 
 const Title = styled.h1`
-  font-size: 32px;
+  font-size: clamp(28px, 3.2vw, 40px);
   font-weight: 700;
   margin: 0;
   color: #FFFFFF;
 `;
 
 const DateText = styled.h2`
-  font-size: 20px;
+  font-size: clamp(16px, 1.5vw, 22px);
   color: #666;
   margin: 5px 0 15px 0;
   font-weight: normal;
@@ -41,7 +42,7 @@ const SectionHeader = styled.div`
 `;
 
 const SectionTitle = styled.div`
-  font-size: 16px;
+  font-size: 17px;
   letter-spacing: 0.3px;
   text-transform: uppercase;
   color: #9A9AA0;
@@ -101,7 +102,7 @@ const NewsBody = styled.div`
 `;
 
 const NewsTitle = styled.div`
-  font-size: 15px;
+  font-size: clamp(15px, 1.1vw, 18px);
   font-weight: 600;
   color: #fff;
   margin-bottom: 6px;
@@ -168,7 +169,7 @@ const SearchInput = styled.input`
   border: none;
   border-radius: 10px;
   background-color: #1C1C1E;
-  font-size: 16px;
+  font-size: 17px;
   outline: none;
   color: #FFFFFF;
   margin-bottom: 10px;
@@ -186,7 +187,7 @@ const StockSelector = styled.div`
 `;
 
 const StockSelectorTitle = styled.div`
-  font-size: 16px;
+  font-size: 17px;
   color: #666;
   margin-bottom: 10px;
 `;
@@ -219,13 +220,13 @@ const ModelInfo = styled.div`
 `;
 
 const ModelName = styled.div`
-  font-size: 16px;
+  font-size: 18px;
   color: #FFFFFF;
   margin-bottom: 4px;
 `;
 
 const ModelDescription = styled.div`
-  font-size: 14px;
+  font-size: 15px;
   color: #666;
 `;
 
@@ -234,14 +235,14 @@ const ModelMetrics = styled.div`
 `;
 
 const Prediction = styled.div`
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   color: ${props => props.value >= 0 ? '#34C759' : '#FF3B30'};
   margin-bottom: 4px;
 `;
 
 const Accuracy = styled.div`
-  font-size: 14px;
+  font-size: 15px;
   color: #666;
 `;
 
@@ -250,6 +251,14 @@ const MiniChart = styled.div`
   height: 30px;
   margin: 0 15px;
   opacity: 0.7;
+`;
+
+const IntradayCard = styled.div`
+  background: #0E0E10;
+  border-radius: 12px;
+  padding: 16px;
+  margin: 16px 0 8px 0;
+  border: 1px solid #1F1F20;
 `;
 
 const LoadingOverlay = styled.div`
@@ -283,7 +292,7 @@ const LoadingContainer = styled.div`
 `;
 
 const LoadingTitle = styled.h3`
-  font-size: 18px;
+  font-size: 20px;
   color: #FFFFFF;
   margin: 0 0 15px 0;
 `;
@@ -475,6 +484,7 @@ const HomePage = () => {
   const [articles, setArticles] = useState([]);
   const [newsError, setNewsError] = useState(null);
   const [newsLoading, setNewsLoading] = useState(true);
+  const [intraday, setIntraday] = useState(null);
 
   // Function to simulate loading progress for each model
   const simulateProgress = (modelIds) => {
@@ -550,6 +560,11 @@ const HomePage = () => {
       setApiLatencyMs(Math.max(1, Math.round(t1 - t0)));
       setLastUpdated(new Date());
       setPredictionsData(data);
+      // Fetch intraday chart after predictions resolve
+      try {
+        const intr = await getIntraday(selectedSymbol);
+        setIntraday(intr);
+      } catch (_) { /* ignore chart failure */ }
       
       // Ensure we show 100% progress before stopping
       setLoadingProgress(prev => {
@@ -719,6 +734,33 @@ const HomePage = () => {
           }}
         />
       </StockSelector>
+
+      {/* Intraday Chart after predictions */}
+      {predictionsData && intraday && (
+        <IntradayCard>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ fontWeight: 600 }}>Intraday • {selectedSymbol}</div>
+            <div style={{ color: '#8e8e93', fontSize: 12 }}>{intraday.market === 'open' ? 'Market open' : 'Market closed'} • as of {new Date(intraday.asOf).toLocaleTimeString()}</div>
+          </div>
+          <div style={{ height: 220 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={intraday.points} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#34C759" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="#34C759" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1f1f20" />
+                <XAxis dataKey="time" tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={30} />
+                <YAxis tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} domain={['auto','auto']} />
+                <Tooltip contentStyle={{ background: '#111113', border: '1px solid #1F1F20', color: '#fff' }} labelStyle={{ color: '#C7C7CC' }} />
+                <Area type="monotone" dataKey="price" stroke="#34C759" fill="url(#grad)" strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </IntradayCard>
+      )}
 
       {loading && (
         <LoadingContainer>
