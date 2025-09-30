@@ -78,6 +78,11 @@ Base path: `/api`
 - `GET /api/predictions/{symbol}`:
   - If cached or computed inline: returns `{ prediction, accuracy, historicalData }`
   - If enqueued: returns `202 Accepted` with `{ job_id }`
+- `GET /api/intraday/{symbol}`: Intraday 1‑minute session (09:30–16:00 ET), Finnhub‑first, AV fallback
+- `GET /api/timeseries/{symbol}?range=1W|1M|3M|6M|YTD|1Y|2Y|5Y|10Y`:
+  - Finnhub‑first per‑range resolutions (1W=hourly, 1M=4h, 3M/6M/YTD/1Y=daily, 2Y/5Y/10Y=server‑downsampled from daily as 2d/5d/10d)
+  - AV daily fallback with compact/full and date filtering
+  - Returns `{ points: [{ date, price }], range }` and never 500s for empty data
 - `GET /api/jobs/{job_id}`: Job polling endpoint: returns `done | running | failed | queued | timeout`
 - `GET /api/status`: Returns `redis`, `queue`, and `storage` health indicators
 - `POST /api/precompute?symbols=AAPL,MSFT&api_key=...`:
@@ -106,6 +111,10 @@ Backend caching keys (Redis):
 - Alpha Vantage Quote: `av:quote:{SYMBOL}` — TTL ~ 10 minutes
 - Throttle keys: `throttle:{type}:{SYMBOL}` — per-symbol short window to avoid bursts
 - Prediction payload: `pred:simple:{MODEL_VERSION}:{SYMBOL}` — TTL ~ 60 minutes
+ - Intraday chart: `av:intraday:{interval}:{SYMBOL}` — TTL ~ 60 seconds
+
+Notes:
+- `/api/timeseries` is computed on demand. Finnhub calls are minimized by using range-appropriate resolutions and falling back to AV as needed. If you want server-side timeseries caching, add a keyed `(symbol,range)` entry with a 60-second TTL.
 
 Job flow:
 
@@ -225,6 +234,25 @@ Steps:
 - Router basename: `/Stock_Hub` (for GitHub Pages)
 - Uses `getPredictions`, `getStockData`, and job polling via `/api/jobs/:id`
 - Configures base URL via `REACT_APP_API_BASE_URL` or auto-inferring
+
+### Current UX and data flow
+
+- Home shows six market news cards (Finnhub-first, AV fallback). News refresh cadence: hourly from 06:00–22:00 local time; every 2 hours overnight.
+- Predict input triggers a request; while running, progress bars simulate phase timing; model metrics and chart then render.
+- Chart ranges and candles:
+  - 1D: minute (session)
+  - 1W: hourly
+  - 1M: 4‑hour
+  - 3M, 6M, YTD, 1Y: daily
+  - 2Y: 2‑day (downsampled)
+  - 5Y: 5‑day (downsampled)
+  - 10Y: 10‑day (downsampled)
+
+Frontend caching:
+- Per‑range series are cached locally (in-memory + localStorage TTL). Toggling ranges reuses cached data after the first fetch.
+
+Formatting:
+- Tooltip labels: HH:MM for 1D; mm/dd for short ranges; mm/dd/yy for YTD/1Y/2Y/5Y/10Y. The x‑axis matches this formatting.
 
 ### News cards (new)
 
