@@ -852,7 +852,8 @@ const HomePage = () => {
                 }
                 try {
                   const ts = await getTimeSeries(selectedSymbol, r);
-                  const pts = (ts.points || []).map(p => ({ x: p.date ?? p.time, price: p.price }));
+                  // Normalize x key by range: 1D uses time, others use date
+                  const pts = (ts.points || []).map(p => ({ x: r==='1D' ? (p.time ?? p.date) : (p.date ?? p.time), price: p.price }));
                   seriesCacheRef.current[r] = pts;
                   saveToStorage(selectedSymbol, r, pts);
                   setSeries({ points: pts });
@@ -871,7 +872,17 @@ const HomePage = () => {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1f1f20" />
-                  <XAxis dataKey="x" tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={30} />
+                  <XAxis dataKey="x" tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={30}
+                    tickFormatter={(v) => {
+                      if (range === '1D') return v;
+                      // format YYYY-MM-DD -> MM/DD
+                      if (typeof v === 'string' && v.includes('-')) {
+                        const [y,m,d] = v.split('-');
+                        return `${m}/${d}`;
+                      }
+                      return v;
+                    }}
+                  />
                   <YAxis dataKey="price" tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} domain={['auto','auto']} />
                   <Tooltip contentStyle={{ background: '#111113', border: '1px solid #1F1F20', color: '#fff' }} labelStyle={{ color: '#C7C7CC' }} />
                   <Area type="monotone" dataKey="price" stroke="#34C759" fill="url(#grad)" strokeWidth={2} />
