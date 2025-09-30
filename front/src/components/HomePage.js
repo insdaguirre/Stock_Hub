@@ -33,6 +33,32 @@ const DateText = styled.h2`
   font-weight: normal;
 `;
 
+const SectionHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 8px 2px 8px 2px;
+`;
+
+const SectionTitle = styled.div`
+  font-size: 16px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: #9A9AA0;
+`;
+
+const RefreshButton = styled.button`
+  background: transparent;
+  color: #9A9AA0;
+  border: 1px solid #2C2C2E;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  &:hover { background-color: #1C1C1E; }
+`;
+
 const NewsGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr;
@@ -47,23 +73,23 @@ const NewsGrid = styled.div`
 
 const NewsCard = styled.a`
   display: flex;
-  background: #1C1C1E;
+  background: #111113;
   border-radius: 12px;
   overflow: hidden;
   text-decoration: none;
   color: inherit;
-  transition: transform .15s ease, background-color .15s ease;
+  transition: transform .15s ease, box-shadow .15s ease, background-color .15s ease;
   cursor: pointer;
-
-  &:hover { transform: translateY(-2px); background-color: #2C2C2E; }
+  border: 1px solid #1F1F20;
+  &:hover { transform: translateY(-2px); background-color: #18181A; box-shadow: 0 6px 18px rgba(0,0,0,0.4); }
+  &:focus-visible { outline: 2px solid #0A84FF; outline-offset: 2px; }
 `;
 
-const NewsImage = styled.div`
+const NewsImage = styled.img`
   width: 38%;
-  min-height: 110px;
-  background-size: cover;
-  background-position: center;
-  background-color: #000; /* fallback */
+  height: 110px;
+  object-fit: cover;
+  background-color: #0a0a0a;
 `;
 
 const NewsBody = styled.div`
@@ -79,11 +105,61 @@ const NewsTitle = styled.div`
   font-weight: 600;
   color: #fff;
   margin-bottom: 6px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 `;
 
-const NewsMeta = styled.div`
+const MetaRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+const SourceChip = styled.span`
+  font-size: 11px;
+  color: #C7C7CC;
+  background: #1F1F20;
+  border: 1px solid #2A2A2C;
+  padding: 2px 8px;
+  border-radius: 999px;
+`;
+
+const TimeText = styled.span`
   font-size: 12px;
   color: #8e8e93;
+`;
+
+const Skeleton = styled.div`
+  display: flex;
+  background: #111113;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #1F1F20;
+  animation: pulse 1.2s ease-in-out infinite;
+  @keyframes pulse { 0%{opacity:.7} 50%{opacity:1} 100%{opacity:.7} }
+`;
+
+const SkeletonLeft = styled.div`
+  width: 38%;
+  height: 110px;
+  background: #1C1C1E;
+`;
+
+const SkeletonRight = styled.div`
+  flex: 1;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`;
+
+const SkeletonBar = styled.div`
+  height: 12px;
+  background: #1C1C1E;
+  border-radius: 6px;
+  width: ${props => props.w || 100}%;
 `;
 
 const SearchInput = styled.input`
@@ -217,6 +293,25 @@ const ProgressContainer = styled.div`
   flex-direction: column;
   gap: 15px;
 `;
+
+// Utility: format ISO datetime to relative time (e.g., "12m ago")
+const timeAgo = (isoString) => {
+  try {
+    const ts = new Date(isoString).getTime();
+    if (!ts) return '';
+    const diff = Math.max(0, Date.now() - ts);
+    const s = Math.floor(diff / 1000);
+    if (s < 60) return `${s}s ago`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    const d = Math.floor(h / 24);
+    return `${d}d ago`;
+  } catch (_) {
+    return '';
+  }
+};
 
 // Extended list of 20 models with more variety
 const models = [
@@ -379,6 +474,7 @@ const HomePage = () => {
   const [storageStatus, setStorageStatus] = useState('unknown');
   const [articles, setArticles] = useState([]);
   const [newsError, setNewsError] = useState(null);
+  const [newsLoading, setNewsLoading] = useState(true);
 
   // Function to simulate loading progress for each model
   const simulateProgress = (modelIds) => {
@@ -527,13 +623,16 @@ const HomePage = () => {
     let mounted = true;
     const load = async () => {
       try {
+        setNewsLoading(true);
         const items = await getNews(null, 6);
         if (!mounted) return;
         setArticles(items);
         setNewsError(null);
+        setNewsLoading(false);
       } catch (e) {
         if (!mounted) return;
         setNewsError('Failed to load news');
+        setNewsLoading(false);
       }
     };
     const computeIntervalMs = () => {
@@ -561,14 +660,34 @@ const HomePage = () => {
       </Header>
 
       {/* News Section */}
+      <SectionHeader>
+        <SectionTitle>Top Stories</SectionTitle>
+        <RefreshButton onClick={() => {
+          setNewsLoading(true);
+          getNews(null, 6).then(items => { setArticles(items); setNewsError(null); setNewsLoading(false); }).catch(() => { setNewsError('Failed to load news'); setNewsLoading(false); });
+        }}>Refresh</RefreshButton>
+      </SectionHeader>
       {newsError && <ErrorMessage>{newsError}</ErrorMessage>}
       <NewsGrid>
-        {articles.slice(0,6).map((a) => (
+        {newsLoading && (!articles || articles.length === 0) && Array.from({ length: 6 }).map((_, i) => (
+          <Skeleton key={`sk-${i}`}>
+            <SkeletonLeft />
+            <SkeletonRight>
+              <SkeletonBar w={80} />
+              <SkeletonBar w={60} />
+              <SkeletonBar w={40} />
+            </SkeletonRight>
+          </Skeleton>
+        ))}
+        {!newsLoading && articles.slice(0,6).map((a) => (
           <NewsCard key={a.id} href={a.url} target="_blank" rel="noopener noreferrer">
-            <NewsImage style={{ backgroundImage: a.imageUrl ? `url(${a.imageUrl})` : 'none' }} />
+            <NewsImage src={a.imageUrl || ''} alt="" loading="lazy" />
             <NewsBody>
               <NewsTitle>{a.title}</NewsTitle>
-              <NewsMeta>{a.source} • {new Date(a.publishedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</NewsMeta>
+              <MetaRow>
+                <SourceChip>{a.source || 'News'}</SourceChip>
+                <TimeText>{timeAgo(a.publishedAt)}</TimeText>
+              </MetaRow>
             </NewsBody>
           </NewsCard>
         ))}
@@ -581,19 +700,22 @@ const HomePage = () => {
         placeholder="Enter stock symbol (e.g., AAPL, MSFT, GOOGL)"
         value={searchTerm}
         onChange={handleSearch}
+        onKeyDown={(e) => { if (e.key === 'Enter') { fetchPredictions(); } }}
       />
       
       <StockSelector>
         <StockSelectorTitle>Selected Symbol: {selectedSymbol}</StockSelectorTitle>
         <SearchInput
           type="button"
-          value="Get Predictions"
+          value={loading ? 'Getting Predictions…' : 'Get Predictions'}
           onClick={fetchPredictions}
+          disabled={loading}
           style={{ 
-            backgroundColor: '#0A84FF',
+            backgroundColor: loading ? '#0a5fd1' : '#0A84FF',
             color: 'white',
             fontWeight: 'bold',
-            cursor: 'pointer'
+            cursor: loading ? 'not-allowed' : 'pointer',
+            opacity: loading ? 0.9 : 1
           }}
         />
       </StockSelector>
@@ -665,26 +787,25 @@ const HomePage = () => {
       )}
 
       {/* Footer: About / API status */}
-      <div style={{ marginTop: 24, color: '#666', fontSize: 12 }}>
-        <div>
-          API: <a href={BASE_URL.replace('/api','/')} target="_blank" rel="noreferrer" style={{ color: '#0A84FF' }}>{BASE_URL}</a>
+      <div style={{ marginTop: 24, color: '#8e8e93', fontSize: 12 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ color: '#C7C7CC' }}>API:</span>
+          <a href={BASE_URL.replace('/api','/')} target="_blank" rel="noreferrer" style={{ color: '#0A84FF' }}>{BASE_URL}</a>
           {apiLatencyMs != null && (
-            <span> • last request {apiLatencyMs} ms</span>
+            <span style={{ background: '#1F1F20', border: '1px solid #2A2A2C', borderRadius: 999, padding: '2px 8px' }}>last {apiLatencyMs} ms</span>
           )}
           {lastUpdated && (
-            <span> • updated {lastUpdated.toLocaleTimeString()}</span>
+            <span style={{ background: '#1F1F20', border: '1px solid #2A2A2C', borderRadius: 999, padding: '2px 8px' }}>updated {lastUpdated.toLocaleTimeString()}</span>
           )}
-          <span>
-            {' '}• status{' '}
+          <span style={{ background: '#1F1F20', border: '1px solid #2A2A2C', borderRadius: 999, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <span style={{
               display: 'inline-block', width: 8, height: 8, borderRadius: 999,
               backgroundColor: apiStatus === 'ok' ? '#34C759' : apiStatus === 'degraded' ? '#FFD60A' : '#FF3B30'
-            }} />{' '}
-            {apiStatus}
+            }} /> {apiStatus}
           </span>
-          <span> • storage {storageStatus}</span>
+          <span style={{ background: '#1F1F20', border: '1px solid #2A2A2C', borderRadius: 999, padding: '2px 8px' }}>storage {storageStatus}</span>
         </div>
-        <div>Stock Hub Demo Build</div>
+        <div style={{ marginTop: 6, color: '#6b6b70' }}>Stock Hub</div>
       </div>
     </Container>
   );
