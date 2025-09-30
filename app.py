@@ -766,9 +766,13 @@ async def get_timeseries(symbol: str, range: str = '1M'):
             return {"points": fh, "range": range}
 
         # Fallback to Alpha Vantage daily when Finnhub unavailable
-        data = fetch_stock_data(symbol)
-        pts = [p for p in data if datetime.strptime(p['date'], '%Y-%m-%d') >= start]
-        return {"points": pts, "range": range}
+        try:
+            data = fetch_stock_data(symbol)
+            pts = [p for p in data if datetime.strptime(p['date'], '%Y-%m-%d') >= start]
+            return {"points": pts, "range": range}
+        except Exception:
+            # As a last resort, return an empty series so the UI doesn't explode
+            return {"points": [], "range": range}
     except HTTPException:
         raise
     except Exception as e:
