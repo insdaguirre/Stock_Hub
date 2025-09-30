@@ -384,8 +384,10 @@ def fetch_intraday(symbol: str, interval: str = '1min'):
     # Prefer Finnhub when available
     if FINNHUB_API_KEY:
         def fetch_candles(day_date):
-            start = int(datetime.combine(day_date, datetime.min.time(), et).replace(hour=9, minute=30).timestamp())
-            end_ts = min(datetime.combine(day_date, datetime.min.time(), et).replace(hour=16, minute=0), now_et)
+            day_open = datetime.combine(day_date, datetime.min.time(), et).replace(hour=9, minute=30)
+            day_close = datetime.combine(day_date, datetime.min.time(), et).replace(hour=16, minute=0)
+            start = int(day_open.timestamp())
+            end_ts = min(day_close, now_et)
             end = int(end_ts.timestamp())
             url = f"https://finnhub.io/api/v1/stock/candle?symbol={symbol.upper()}&resolution=1&from={start}&to={end}&token={FINNHUB_API_KEY}"
             js = requests.get(url, timeout=15).json()
@@ -396,7 +398,7 @@ def fetch_intraday(symbol: str, interval: str = '1min'):
             out = []
             for ts_i, c_i in zip(times, closes):
                 ts = datetime.fromtimestamp(int(ts_i), tz=et)
-                if ts < open_time or ts > close_time:
+                if ts < day_open or ts > day_close:
                     continue
                 out.append({"time": ts.strftime('%H:%M'), "price": float(c_i)})
             return out
