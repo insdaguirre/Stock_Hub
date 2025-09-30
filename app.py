@@ -752,14 +752,16 @@ async def get_timeseries(symbol: str, range: str = '1M'):
                 return None
 
         start = _compute_start_date(range, now_et)
-        total_days = (now_et.date() - start.date()).days
-        # Choose a reasonable resolution
-        if total_days <= 7:
-            res = '30'  # 30-minute buckets
-        elif total_days <= 31:
-            res = '60'  # hourly
-        else:
-            res = 'D'
+        # Choose efficient resolutions per range
+        def map_resolution(rk: str) -> str:
+            if rk in ['1W', '1M', '3M']:
+                return 'D'    # daily for up to 3 months
+            if rk in ['6M', 'YTD', '1Y', '2Y']:
+                return 'W'    # weekly for 6m–2y
+            if rk in ['5Y', '10Y']:
+                return 'M'    # monthly for long ranges
+            return 'D'
+        res = map_resolution(range)
 
         fh = finnhub_candles(start, now_et, res)
         if fh is not None and len(fh) >= 2:
@@ -768,7 +770,9 @@ async def get_timeseries(symbol: str, range: str = '1M'):
         # Fallback to Alpha Vantage daily when Finnhub down
         try:
             data = fetch_stock_data(symbol)
-            pts = [p for p in data if datetime.strptime(p['date'], '%Y-%m-%d') >= start]
+            # Compare dates only (avoid tz-aware vs naive mismatch)
+            start_date = start.date()
+            pts = [p for p in data if datetime.strptime(p['date'], '%Y-%m-%d').date() >= start_date]
             return {"points": pts, "range": range}
         except Exception:
             # As a last resort, return an empty series so the UI doesn't explode
