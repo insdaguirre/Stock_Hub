@@ -48,18 +48,6 @@ const SectionTitle = styled.div`
   color: #9A9AA0;
 `;
 
-const RefreshButton = styled.button`
-  background: transparent;
-  color: #9A9AA0;
-  border: 1px solid #2C2C2E;
-  border-radius: 999px;
-  padding: 6px 10px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-  &:hover { background-color: #1C1C1E; }
-`;
-
 const NewsGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr;
@@ -509,7 +497,7 @@ const models = [
 const HomePage = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedSymbol, setSelectedSymbol] = useState('AAPL'); // Default to Apple
+  const [selectedSymbol, setSelectedSymbol] = useState('SPY'); // Default to S&P 500 ETF
   const [predictionsData, setPredictionsData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -790,10 +778,6 @@ const HomePage = () => {
       {/* News Section */}
       <SectionHeader>
         <SectionTitle>Top Stories</SectionTitle>
-        <RefreshButton onClick={() => {
-          setNewsLoading(true);
-          getNews(null, 6).then(items => { setArticles(items); setNewsError(null); setNewsLoading(false); }).catch(() => { setNewsError('Failed to load news'); setNewsLoading(false); });
-        }}>Refresh</RefreshButton>
       </SectionHeader>
       {newsError && <ErrorMessage>{newsError}</ErrorMessage>}
       <NewsGrid>
