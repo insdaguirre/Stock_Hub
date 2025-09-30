@@ -746,7 +746,11 @@ async def get_timeseries(symbol: str, range: str = '1M'):
                 out = []
                 for ts_i, c_i in zip(times, closes):
                     dt = datetime.fromtimestamp(int(ts_i), tz=et)
-                    out.append({"date": dt.strftime('%Y-%m-%d'), "price": float(c_i)})
+                    # Use full timestamp for intraday/hourly resolutions; date-only for D/W/M
+                    if resolution in ['1','5','15','30','60']:
+                        out.append({"date": dt.isoformat(), "price": float(c_i)})
+                    else:
+                        out.append({"date": dt.strftime('%Y-%m-%d'), "price": float(c_i)})
                 return out
             except Exception:
                 return None
@@ -754,8 +758,10 @@ async def get_timeseries(symbol: str, range: str = '1M'):
         start = _compute_start_date(range, now_et)
         # Choose efficient resolutions per range
         def map_resolution(rk: str) -> str:
-            # Favor daily for up to 1Y to ensure density; aggregate farther out
-            if rk in ['1W', '1M', '3M', '6M', 'YTD', '1Y']:
+            # 1W hourly for detail; daily up to 1Y; weekly for 2–5Y; monthly for 10Y
+            if rk == '1W':
+                return '60'   # hourly
+            if rk in ['1M', '3M', '6M', 'YTD', '1Y']:
                 return 'D'    # daily up to 1Y
             if rk in ['2Y', '5Y']:
                 return 'W'    # weekly for 2–5Y
