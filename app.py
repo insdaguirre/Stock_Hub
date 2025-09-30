@@ -412,11 +412,13 @@ def fetch_intraday(symbol: str, interval: str = '1min'):
                 if len(pts) >= 2:
                     points = pts
                     break
-        state = 'open' if (now_et.weekday() < 5 and open_time <= now_et <= close_time) else 'closed'
-        result = {"points": points, "market": state, "asOf": now_et.isoformat()}
-        _cache_set(cache_key, json.dumps(result), ttl_seconds=60)
-        print(json.dumps({"route": "fh_intraday", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000)}))
-        return result
+        # If still empty, fall back to Alpha Vantage below
+        if len(points) >= 2:
+            state = 'open' if (now_et.weekday() < 5 and open_time <= now_et <= close_time) else 'closed'
+            result = {"points": points, "market": state, "asOf": now_et.isoformat()}
+            _cache_set(cache_key, json.dumps(result), ttl_seconds=60)
+            print(json.dumps({"route": "fh_intraday", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000), "count": len(points)}))
+            return result
 
     throttled = _throttle(f"intraday:{symbol}")
 
@@ -469,7 +471,7 @@ def fetch_intraday(symbol: str, interval: str = '1min'):
     result = {"points": points, "market": state, "asOf": now_et.isoformat()}
     # Short cache as data moves intraday
     _cache_set(cache_key, json.dumps(result), ttl_seconds=60)
-    print(json.dumps({"route": "av_intraday", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000)}))
+    print(json.dumps({"route": "av_intraday", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000), "count": len(points)}))
     return result
 
 def calculate_prediction(prices, days_ahead=1):
