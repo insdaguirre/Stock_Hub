@@ -711,20 +711,20 @@ const HomePage = () => {
         // Do not store 1D in localStorage so it stays live
         setSeries({ points: pts });
       } catch (_) {}
-        // background prefetch
-        ['1W','1M','3M'].forEach(async r => {
-          try {
-            const bg = await getTimeSeries(selectedSymbol, r);
-            const ptsArr = (bg.points || []).map((p) => {
-              const dtStr = p && p.date ? p.date : (p && p.time ? p.time : new Date().toISOString());
-              const xTs = new Date(dtStr).getTime();
-              return { xTs, price: p && typeof p.price === 'number' ? p.price : Number(p.price) };
-            });
-            seriesCacheRef.current[r] = ptsArr;
-            saveToStorage(selectedSymbol, r, ptsArr);
-          } catch (_) {}
-        });
-      } catch (_) {}
+      // background prefetch
+      ['1W','1M','3M'].forEach(async (r) => {
+        try {
+          const bg = await getTimeSeries(selectedSymbol, r);
+          const ptsArr = (bg.points || []).map((p) => {
+            const dtStr = p && p.date ? p.date : (p && p.time ? p.time : new Date().toISOString());
+            const xTs = new Date(dtStr).getTime();
+            const priceNum = p && typeof p.price === 'number' ? p.price : Number(p.price);
+            return { xTs, price: priceNum };
+          });
+          seriesCacheRef.current[r] = ptsArr;
+          saveToStorage(selectedSymbol, r, ptsArr);
+        } catch (_) {}
+      });
     };
     load();
     return () => { mounted = false; };
