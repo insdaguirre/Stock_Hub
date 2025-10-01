@@ -715,9 +715,13 @@ const HomePage = () => {
         ['1W','1M','3M'].forEach(async r => {
           try {
             const bg = await getTimeSeries(selectedSymbol, r);
-            const mapped = (bg.points || []).map(p => ({ xTs: new Date(p.date ? p.date : p.time).getTime(), price: p.price }));
-            seriesCacheRef.current[r] = mapped;
-            saveToStorage(selectedSymbol, r, mapped);
+            const ptsArr = (bg.points || []).map((p) => {
+              const dtStr = p && p.date ? p.date : (p && p.time ? p.time : new Date().toISOString());
+              const xTs = new Date(dtStr).getTime();
+              return { xTs, price: p && typeof p.price === 'number' ? p.price : Number(p.price) };
+            });
+            seriesCacheRef.current[r] = ptsArr;
+            saveToStorage(selectedSymbol, r, ptsArr);
           } catch (_) {}
         });
       } catch (_) {}
