@@ -697,7 +697,7 @@ const HomePage = () => {
         // Always fetch fresh intraday points for 1D to avoid stale cached data
         const ts = await getTimeSeries(selectedSymbol, '1D');
         if (!mounted) return;
-        const pts = (ts.points || []).map(p => {
+        let pts = (ts.points || []).map(p => {
           if (p.date) {
             const dt = new Date(p.date);
             return { xTs: dt.getTime(), price: p.price };
@@ -707,6 +707,13 @@ const HomePage = () => {
           if (hhmm.length >= 2) { d.setHours(parseInt(hhmm[0],10), parseInt(hhmm[1],10), 0, 0); }
           return { xTs: d.getTime(), price: p.price };
         });
+        // Clamp intraday series to API asOf time
+        try {
+          if (intraday && intraday.market === 'open' && intraday.asOf) {
+            const asOfTs = new Date(intraday.asOf).getTime();
+            pts = pts.filter(p => typeof p.xTs === 'number' && p.xTs <= asOfTs);
+          }
+        } catch (_) {}
         seriesCacheRef.current['1D'] = pts;
         // Do not store 1D in localStorage so it stays live
         setSeries({ points: pts });
@@ -872,7 +879,7 @@ const HomePage = () => {
                 try {
                   const ts = await getTimeSeries(selectedSymbol, r);
                   // Normalize to numeric timestamp for robust axis scaling
-                  const pts = (ts.points || []).map(p => {
+                  let pts = (ts.points || []).map(p => {
                     if (r === '1D') {
                       if (p.date) {
                         const dt = new Date(p.date);
@@ -887,6 +894,15 @@ const HomePage = () => {
                     const dt = p.date ? new Date(p.date) : (p.time ? new Date(p.time) : new Date());
                     return { xTs: dt.getTime(), price: p.price };
                   });
+                  // Clamp intraday to API asOf
+                  if (r === '1D') {
+                    try {
+                      if (intraday && intraday.market === 'open' && intraday.asOf) {
+                        const asOfTs = new Date(intraday.asOf).getTime();
+                        pts = pts.filter(p => typeof p.xTs === 'number' && p.xTs <= asOfTs);
+                      }
+                    } catch (_) {}
+                  }
                   seriesCacheRef.current[r] = pts;
                   if (r !== '1D') {
                     saveToStorage(selectedSymbol, r, pts);
