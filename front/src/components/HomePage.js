@@ -556,6 +556,29 @@ const HomePage = () => {
     } catch (_) { return null; }
   };
 
+// Hydrate from persistent caches immediately to avoid blank screen on back navigation
+useEffect(() => {
+  try {
+    const cached1D = loadFromStorage(selectedSymbol, '1D');
+    const cached1W = loadFromStorage(selectedSymbol, '1W');
+    const cached1M = loadFromStorage(selectedSymbol, '1M');
+    if (cached1D && cached1D.length) {
+      seriesCacheRef.current['1D'] = cached1D;
+      setSeries({ points: cached1D });
+      setRange('1D');
+    } else if (cached1W && cached1W.length) {
+      seriesCacheRef.current['1W'] = cached1W;
+      setSeries({ points: cached1W });
+      setRange('1W');
+    } else if (cached1M && cached1M.length) {
+      seriesCacheRef.current['1M'] = cached1M;
+      setSeries({ points: cached1M });
+      setRange('1M');
+    }
+  } catch (_) {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
   const saveToStorage = (sym, r, points) => {
     try {
       // TTL per range: short for 1D, longer for long ranges

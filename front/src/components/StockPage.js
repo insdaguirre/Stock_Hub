@@ -50,12 +50,12 @@ const BackButton = styled.button`
 `;
 
 const ChartContainer = styled.div`
-  background: white;
+  background: #0E0E10;
   border-radius: 12px;
-  padding: 24px;
+  padding: 16px 16px 8px 16px;
   margin-bottom: 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  height: 400px;
+  border: 1px solid #1F1F20;
+  height: 420px;
 `;
 
 const ModelInfo = styled.div`
@@ -279,27 +279,14 @@ const StockPage = () => { //Defines StockPage as a functional react component
 
       <ChartContainer>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={[...stockData.historicalData, { date: predictions.nextDate, prediction: predictions.models[modelId]?.prediction }]}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            <Line 
-              type="monotone" 
-              dataKey="price" 
-              stroke="#1c1c1e" 
-              name="Historical Price"
-              strokeWidth={2}
-            />
-            <Line 
-              type="monotone" 
-              dataKey="prediction" 
-              stroke="#34C759" 
-              name="Prediction"
-              strokeWidth={2}
-              strokeDasharray="5 5"
-            />
+          <LineChart data={[...stockData.historicalData, { date: predictions.nextDate, prediction: predictions.models[modelId]?.prediction }]} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#1f1f20" />
+            <XAxis dataKey="date" tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={30} />
+            <YAxis tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} domain={["auto","auto"]} />
+            <Tooltip contentStyle={{ background: '#111113', border: '1px solid #1F1F20', color: '#fff' }} labelStyle={{ color: '#C7C7CC' }} />
+            <Legend wrapperStyle={{ color: '#C7C7CC' }} />
+            <Line type="monotone" dataKey="price" stroke="#C7C7CC" name="Historical Price" strokeWidth={2} dot={{ r: 1.5, stroke: '#C7C7CC' }} />
+            <Line type="monotone" dataKey="prediction" stroke="#34C759" name="Prediction" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 2, stroke: '#34C759' }} />
           </LineChart>
         </ResponsiveContainer>
       </ChartContainer>
