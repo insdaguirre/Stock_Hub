@@ -695,31 +695,44 @@ const HomePage = () => {
         if (!mounted) return;
         setOverview(ov);
       } catch (_) {}
+
+      // Prefer using the explicit intraday payload for 1D. Fallback to timeseries if needed.
+      let pts = [];
       try {
-        // Always fetch fresh intraday points for 1D to avoid stale cached data
-        const ts = await getTimeSeries(selectedSymbol, '1D');
-        if (!mounted) return;
-        let pts = (ts.points || []).map(p => {
-          if (p.date) {
-            const dt = new Date(p.date);
-            return { xTs: dt.getTime(), price: p.price };
-          }
-          const hhmm = (p.time ?? '').split(':');
-          const d = new Date();
-          if (hhmm.length >= 2) { d.setHours(parseInt(hhmm[0],10), parseInt(hhmm[1],10), 0, 0); }
-          return { xTs: d.getTime(), price: p.price };
+        const p = (intrResp && intrResp.points) ? intrResp.points : [];
+        pts = (p || []).map(pt => {
+          const dtStr = pt.date ? pt.date : (pt.time ? pt.time : new Date().toISOString());
+          return { xTs: new Date(dtStr).getTime(), price: pt.price };
         });
-        // Clamp intraday series to API asOf time
+      } catch (_) { pts = []; }
+
+      if (!pts || pts.length < 2) {
         try {
-          if (intrResp && intrResp.market === 'open' && intrResp.asOf) {
-            const asOfTs = new Date(intrResp.asOf).getTime();
-            pts = pts.filter(p => typeof p.xTs === 'number' && p.xTs <= asOfTs);
-          }
-        } catch (_) {}
-        seriesCacheRef.current['1D'] = pts;
-        // Do not store 1D in localStorage so it stays live
-        setSeries({ points: pts });
+          const ts = await getTimeSeries(selectedSymbol, '1D');
+          if (!mounted) return;
+          pts = (ts.points || []).map(p => {
+            if (p.date) {
+              const dt = new Date(p.date);
+              return { xTs: dt.getTime(), price: p.price };
+            }
+            const hhmm = (p.time ?? '').split(':');
+            const d = new Date();
+            if (hhmm.length >= 2) { d.setHours(parseInt(hhmm[0],10), parseInt(hhmm[1],10), 0, 0); }
+            return { xTs: d.getTime(), price: p.price };
+          });
+        } catch (_) { pts = []; }
+      }
+
+      // Clamp intraday to the API asOf when market is open
+      try {
+        if (intrResp && intrResp.market === 'open' && intrResp.asOf) {
+          const asOfTs = new Date(intrResp.asOf).getTime();
+          pts = (pts || []).filter(p => typeof p.xTs === 'number' && p.xTs <= asOfTs);
+        }
       } catch (_) {}
+
+      seriesCacheRef.current['1D'] = pts || [];
+      setSeries({ points: pts || [] });
       // background prefetch
       ['1W','1M','3M'].forEach(async (r) => {
         try {
