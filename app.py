@@ -758,7 +758,7 @@ async def get_timeseries(symbol: str, range: str = '1M'):
                 for ts_i, c_i in zip(times, closes):
                     dt = datetime.fromtimestamp(int(ts_i), tz=et)
                     # Use full timestamp for intraday/hourly resolutions; date-only for D/W/M
-                    if resolution in ['1','5','15','30','60']:
+                    if resolution in ['1','5','15','30','60','120']:
                         out.append({"date": dt.isoformat(), "price": float(c_i)})
                     else:
                         out.append({"date": dt.strftime('%Y-%m-%d'), "price": float(c_i)})
@@ -771,9 +771,9 @@ async def get_timeseries(symbol: str, range: str = '1M'):
         def map_resolution(rk: str) -> str:
             # Requested custom mapping
             if rk == '1W':
-                return '60'   # hourly
+                return '30'   # 30 minutes
             if rk == '1M':
-                return '240'  # 4 hours
+                return '120'  # 2 hours
             if rk in ['3M', '6M']:
                 return 'D'    # daily
             if rk in ['YTD', '1Y']:
