@@ -715,7 +715,7 @@ const HomePage = () => {
         ['1W','1M','3M'].forEach(async r => {
           try {
             const bg = await getTimeSeries(selectedSymbol, r);
-            const mapped = (bg.points || []).map(p => ({ xTs: new Date(p.date ?? p.time).getTime(), price: p.price }));
+            const mapped = (bg.points || []).map(p => ({ xTs: new Date(p.date ? p.date : p.time).getTime(), price: p.price }));
             seriesCacheRef.current[r] = mapped;
             saveToStorage(selectedSymbol, r, mapped);
           } catch (_) {}
