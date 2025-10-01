@@ -538,22 +538,41 @@ async def get_predictions(symbol: str):
 
         # Calculate next day's date
         last_date = datetime.strptime(historical_data[-1]['date'], '%Y-%m-%d')
-        next_date = (last_date + timedelta(days=1)).strftime('%Y-%m-%d')
-
-        predicted_price = calculate_prediction(prices)
         current_price = prices[-1]
-        change_percent = ((predicted_price - current_price) / current_price) * 100
         
         # Calculate accuracy (simplified)
         accuracy = 85  # Base accuracy
         recent_volatility = np.std(prices[-10:]) / np.mean(prices[-10:])
         accuracy = max(75, min(95, accuracy - (recent_volatility * 100)))
         
+        # Calculate predictions for 1 day, 2 days, and 1 week
+        prediction_1d = calculate_prediction(prices, days_ahead=1)
+        prediction_2d = calculate_prediction(prices, days_ahead=2)
+        prediction_1w = calculate_prediction(prices, days_ahead=7)
+        
         response = {
+            "predictions": {
+                "1_day": {
+                    "date": (last_date + timedelta(days=1)).strftime('%Y-%m-%d'),
+                    "price": prediction_1d,
+                    "change_percent": ((prediction_1d - current_price) / current_price) * 100
+                },
+                "2_day": {
+                    "date": (last_date + timedelta(days=2)).strftime('%Y-%m-%d'),
+                    "price": prediction_2d,
+                    "change_percent": ((prediction_2d - current_price) / current_price) * 100
+                },
+                "1_week": {
+                    "date": (last_date + timedelta(days=7)).strftime('%Y-%m-%d'),
+                    "price": prediction_1w,
+                    "change_percent": ((prediction_1w - current_price) / current_price) * 100
+                }
+            },
+            # Legacy field for backwards compatibility (use 1 day prediction)
             "prediction": {
-                "date": next_date,
-                "price": predicted_price,
-                "change_percent": change_percent
+                "date": (last_date + timedelta(days=1)).strftime('%Y-%m-%d'),
+                "price": prediction_1d,
+                "change_percent": ((prediction_1d - current_price) / current_price) * 100
             },
             "accuracy": accuracy,
             "historicalData": historical_data

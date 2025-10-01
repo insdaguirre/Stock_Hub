@@ -34,44 +34,112 @@ export const getPredictions = async (symbol) => {
       data = await response.json();
     }
     
-    // Format the prediction for each model type
+    // Get multi-timeframe predictions
+    const predictions = data.predictions || {};
+    const pred1d = predictions['1_day'] || data.prediction;
+    const pred2d = predictions['2_day'] || data.prediction;
+    const pred1w = predictions['1_week'] || data.prediction;
+    
+    // Format the prediction for each model type, using 1-week prediction
     const modelPredictions = {
       1: { // LSTM
-        prediction: data.prediction.price,
+        prediction: pred1w.price,
         accuracy: data.accuracy,
         confidence: 85 + Math.random() * 10,
-        change_percent: data.prediction.change_percent
+        change_percent: pred1w.change_percent,
+        // Multi-timeframe predictions
+        predictions_1d: pred1d,
+        predictions_2d: pred2d,
+        predictions_1w: pred1w
       },
       2: { // Random Forest - simulated variation
-        prediction: data.prediction.price * (1 + (Math.random() - 0.5) * 0.02),
+        prediction: pred1w.price * (1 + (Math.random() - 0.5) * 0.02),
         accuracy: data.accuracy - 2,
         confidence: 82 + Math.random() * 10,
-        change_percent: data.prediction.change_percent * (1 + (Math.random() - 0.5) * 0.1)
+        change_percent: pred1w.change_percent * (1 + (Math.random() - 0.5) * 0.1),
+        // Multi-timeframe predictions
+        predictions_1d: {
+          ...pred1d,
+          price: pred1d.price * (1 + (Math.random() - 0.5) * 0.02)
+        },
+        predictions_2d: {
+          ...pred2d,
+          price: pred2d.price * (1 + (Math.random() - 0.5) * 0.02)
+        },
+        predictions_1w: {
+          ...pred1w,
+          price: pred1w.price * (1 + (Math.random() - 0.5) * 0.02)
+        }
       },
       3: { // Prophet - simulated variation
-        prediction: data.prediction.price * (1 + (Math.random() - 0.5) * 0.015),
+        prediction: pred1w.price * (1 + (Math.random() - 0.5) * 0.015),
         accuracy: data.accuracy - 4,
         confidence: 80 + Math.random() * 10,
-        change_percent: data.prediction.change_percent * (1 + (Math.random() - 0.5) * 0.15)
+        change_percent: pred1w.change_percent * (1 + (Math.random() - 0.5) * 0.15),
+        // Multi-timeframe predictions
+        predictions_1d: {
+          ...pred1d,
+          price: pred1d.price * (1 + (Math.random() - 0.5) * 0.015)
+        },
+        predictions_2d: {
+          ...pred2d,
+          price: pred2d.price * (1 + (Math.random() - 0.5) * 0.015)
+        },
+        predictions_1w: {
+          ...pred1w,
+          price: pred1w.price * (1 + (Math.random() - 0.5) * 0.015)
+        }
       },
       4: { // XGBoost - simulated variation
-        prediction: data.prediction.price * (1 + (Math.random() - 0.5) * 0.01),
+        prediction: pred1w.price * (1 + (Math.random() - 0.5) * 0.01),
         accuracy: data.accuracy - 1,
         confidence: 84 + Math.random() * 10,
-        change_percent: data.prediction.change_percent * (1 + (Math.random() - 0.5) * 0.05)
+        change_percent: pred1w.change_percent * (1 + (Math.random() - 0.5) * 0.05),
+        // Multi-timeframe predictions
+        predictions_1d: {
+          ...pred1d,
+          price: pred1d.price * (1 + (Math.random() - 0.5) * 0.01)
+        },
+        predictions_2d: {
+          ...pred2d,
+          price: pred2d.price * (1 + (Math.random() - 0.5) * 0.01)
+        },
+        predictions_1w: {
+          ...pred1w,
+          price: pred1w.price * (1 + (Math.random() - 0.5) * 0.01)
+        }
       },
       5: { // ARIMA - simulated variation
-        prediction: data.prediction.price * (1 + (Math.random() - 0.5) * 0.025),
+        prediction: pred1w.price * (1 + (Math.random() - 0.5) * 0.025),
         accuracy: data.accuracy - 7,
         confidence: 78 + Math.random() * 10,
-        change_percent: data.prediction.change_percent * (1 + (Math.random() - 0.5) * 0.2)
+        change_percent: pred1w.change_percent * (1 + (Math.random() - 0.5) * 0.2),
+        // Multi-timeframe predictions
+        predictions_1d: {
+          ...pred1d,
+          price: pred1d.price * (1 + (Math.random() - 0.5) * 0.025)
+        },
+        predictions_2d: {
+          ...pred2d,
+          price: pred2d.price * (1 + (Math.random() - 0.5) * 0.025)
+        },
+        predictions_1w: {
+          ...pred1w,
+          price: pred1w.price * (1 + (Math.random() - 0.5) * 0.025)
+        }
       }
     };
 
     return {
       models: modelPredictions,
       historicalData: data.historicalData,
-      nextDate: data.prediction.date
+      nextDate: data.prediction.date,
+      // Include raw multi-timeframe predictions for direct access
+      multiTimeframe: {
+        oneDay: pred1d,
+        twoDay: pred2d,
+        oneWeek: pred1w
+      }
     };
   } catch (error) {
     console.error('Error fetching predictions:', error);
