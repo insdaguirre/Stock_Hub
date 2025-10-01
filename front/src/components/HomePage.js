@@ -694,28 +694,23 @@ const HomePage = () => {
         setOverview(ov);
       } catch (_) {}
       try {
-        const cached = loadFromStorage(selectedSymbol, '1D');
-        if (cached && cached.length) {
-          seriesCacheRef.current['1D'] = cached;
-          if (!mounted) return;
-          setSeries({ points: cached });
-        } else {
-          const ts = await getTimeSeries(selectedSymbol, '1D');
-          if (!mounted) return;
-          const pts = (ts.points || []).map(p => {
-            if (p.date) {
-              const dt = new Date(p.date);
-              return { xTs: dt.getTime(), price: p.price };
-            }
-            const hhmm = (p.time ?? '').split(':');
-            const d = new Date();
-            if (hhmm.length >= 2) { d.setHours(parseInt(hhmm[0],10), parseInt(hhmm[1],10), 0, 0); }
-            return { xTs: d.getTime(), price: p.price };
-          });
-          seriesCacheRef.current['1D'] = pts;
-          saveToStorage(selectedSymbol, '1D', pts);
-          setSeries({ points: pts });
-        }
+        // Always fetch fresh intraday points for 1D to avoid stale cached data
+        const ts = await getTimeSeries(selectedSymbol, '1D');
+        if (!mounted) return;
+        const pts = (ts.points || []).map(p => {
+          if (p.date) {
+            const dt = new Date(p.date);
+            return { xTs: dt.getTime(), price: p.price };
+          }
+          const hhmm = (p.time ?? '').split(':');
+          const d = new Date();
+          if (hhmm.length >= 2) { d.setHours(parseInt(hhmm[0],10), parseInt(hhmm[1],10), 0, 0); }
+          return { xTs: d.getTime(), price: p.price };
+        });
+        seriesCacheRef.current['1D'] = pts;
+        // Do not store 1D in localStorage so it stays live
+        setSeries({ points: pts });
+      } catch (_) {}
         // background prefetch
         ['1W','1M','3M'].forEach(async r => {
           try {
@@ -854,18 +849,21 @@ const HomePage = () => {
             {['1D','1W','1M','3M','6M','YTD','1Y','2Y','5Y','10Y'].map(r => (
               <RangeTab key={r} active={range === r} onClick={async () => {
                 setRange(r);
-                // serve from in-memory cache first
-                let cached = seriesCacheRef.current[r];
-                if (!cached || !cached.length) {
-                  // try localStorage
-                  cached = loadFromStorage(selectedSymbol, r);
-                  if (cached && cached.length) {
-                    seriesCacheRef.current[r] = cached;
+                // For 1D, bypass storage caches; always fetch fresh intraday
+                if (r !== '1D') {
+                  // serve from in-memory cache first
+                  let cached = seriesCacheRef.current[r];
+                  if (!cached || !cached.length) {
+                    // try localStorage
+                    cached = loadFromStorage(selectedSymbol, r);
+                    if (cached && cached.length) {
+                      seriesCacheRef.current[r] = cached;
+                    }
                   }
-                }
-                if (cached && cached.length) {
-                  setSeries({ points: cached });
-                  return;
+                  if (cached && cached.length) {
+                    setSeries({ points: cached });
+                    return;
+                  }
                 }
                 try {
                   const ts = await getTimeSeries(selectedSymbol, r);
@@ -886,7 +884,9 @@ const HomePage = () => {
                     return { xTs: dt.getTime(), price: p.price };
                   });
                   seriesCacheRef.current[r] = pts;
-                  saveToStorage(selectedSymbol, r, pts);
+                  if (r !== '1D') {
+                    saveToStorage(selectedSymbol, r, pts);
+                  }
                   setSeries({ points: pts });
                 } catch (_) {}
               }}>{r}</RangeTab>
