@@ -758,7 +758,7 @@ async def get_timeseries(symbol: str, range: str = '1M'):
                 for ts_i, c_i in zip(times, closes):
                     dt = datetime.fromtimestamp(int(ts_i), tz=et)
                     # Use full timestamp for intraday/hourly resolutions; date-only for D/W/M
-                    if resolution in ['1','5','15','30','60','120']:
+                    if resolution in ['1','5','15','30','60']:
                         out.append({"date": dt.isoformat(), "price": float(c_i)})
                     else:
                         out.append({"date": dt.strftime('%Y-%m-%d'), "price": float(c_i)})
@@ -769,21 +769,22 @@ async def get_timeseries(symbol: str, range: str = '1M'):
         start = _compute_start_date(range, now_et)
         # Choose efficient resolutions per range
         def map_resolution(rk: str) -> str:
-            # Requested custom mapping
+            # Finnhub supports: 1, 5, 15, 30, 60, D, W, M
+            # Use these exact values for best results
             if rk == '1W':
                 return '30'   # 30 minutes
             if rk == '1M':
-                return '120'  # 2 hours
+                return '60'   # 1 hour (120 not supported by Finnhub, use 60)
             if rk in ['3M', '6M']:
                 return 'D'    # daily
             if rk in ['YTD', '1Y']:
                 return 'D'    # daily
             if rk == '2Y':
-                return '2D'   # 2-day (Finnhub supports numerical minutes/hours/d/w/m; we'll downsample client-side)
+                return 'D'    # daily (downsample to 2D client-side if needed)
             if rk == '5Y':
-                return '5D'   # 5-day
+                return 'D'    # daily (downsample to 5D client-side if needed)
             if rk == '10Y':
-                return '10D'  # 10-day
+                return 'D'    # daily (downsample to 10D client-side if needed)
             return 'D'
         res = map_resolution(range)
 
