@@ -222,6 +222,32 @@ const ModelMetrics = styled.div`
   text-align: right;
 `;
 
+// New UI for multi-timeframe predictions (1D, 2D, 1W)
+const PredGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, minmax(64px, 1fr));
+  gap: 10px;
+  margin-bottom: 4px;
+`;
+
+const PredCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+`;
+
+const PredLabel = styled.div`
+  font-size: 12px;
+  color: #8e8e93;
+  margin-bottom: 2px;
+`;
+
+const PredValue = styled.div`
+  font-size: 16px;
+  font-weight: 600;
+  color: ${props => props.value >= 0 ? '#34C759' : '#FF3B30'};
+`;
+
 const Prediction = styled.div`
   font-size: 18px;
   font-weight: 600;
@@ -719,15 +745,27 @@ const HomePage = () => {
     }
   };
 
-  const getModelPrediction = (modelId) => {
+  // Helper: format percent with sign
+  const formatPct = (n) => {
+    if (n == null || isNaN(n)) return '—';
+    const v = Number(n);
+    const sign = v >= 0 ? '+' : '';
+    return `${sign}${v.toFixed(2)}%`;
+  };
+
+  // Return three prediction columns (1D, 2D, 1W) plus accuracy
+  const getModelPredColumns = (modelId) => {
     if (!predictionsData || !predictionsData.models[modelId]) return null;
-    
     const model = predictionsData.models[modelId];
-    const predictionValue = ((model.prediction / predictionsData.historicalData[predictionsData.historicalData.length - 1].price) - 1) * 100;
+    // Prefer model-scoped multi-timeframe first, fall back to top-level
+    const oneDay = model.predictions_1d || predictionsData?.multiTimeframe?.oneDay || null;
+    const twoDay = model.predictions_2d || predictionsData?.multiTimeframe?.twoDay || null;
+    const oneWeek = model.predictions_1w || predictionsData?.multiTimeframe?.oneWeek || null;
     return {
-      prediction: `${predictionValue >= 0 ? '+' : ''}${predictionValue.toFixed(2)}%`,
-      accuracy: `${model.accuracy}%`,
-      value: predictionValue
+      d1: oneDay ? Number(oneDay.change_percent) : null,
+      d2: twoDay ? Number(twoDay.change_percent) : null,
+      w1: oneWeek ? Number(oneWeek.change_percent) : null,
+      accuracy: `${model.accuracy}%`
     };
   };
 
@@ -1021,7 +1059,7 @@ const HomePage = () => {
         <ModelsList style={{ position: 'relative' }}>
           {loading && <LoadingOverlay>Loading predictions...</LoadingOverlay>}
           {implementedModels.map(model => {
-            const prediction = getModelPrediction(model.id);
+            const cols = getModelPredColumns(model.id);
             return (
               <ModelCard key={model.id} onClick={() => handleModelClick(model.id)}>
                 <ModelInfo>
@@ -1032,10 +1070,25 @@ const HomePage = () => {
                   {/* Mini chart placeholder */}
                 </MiniChart>
                 <ModelMetrics>
-                  <Prediction value={prediction ? parseFloat(prediction.prediction) : 0}>
-                    {prediction ? prediction.prediction : 'Loading...'}
-                  </Prediction>
-                  <Accuracy>{prediction ? prediction.accuracy : '...'}</Accuracy>
+                  {cols ? (
+                    <PredGrid>
+                      <PredCol>
+                        <PredLabel>1D</PredLabel>
+                        <PredValue value={cols.d1 ?? 0}>{formatPct(cols.d1)}</PredValue>
+                      </PredCol>
+                      <PredCol>
+                        <PredLabel>2D</PredLabel>
+                        <PredValue value={cols.d2 ?? 0}>{formatPct(cols.d2)}</PredValue>
+                      </PredCol>
+                      <PredCol>
+                        <PredLabel>1W</PredLabel>
+                        <PredValue value={cols.w1 ?? 0}>{formatPct(cols.w1)}</PredValue>
+                      </PredCol>
+                    </PredGrid>
+                  ) : (
+                    <Prediction value={0}>Loading...</Prediction>
+                  )}
+                  <Accuracy>{cols ? cols.accuracy : '...'}</Accuracy>
                 </ModelMetrics>
               </ModelCard>
             );
