@@ -232,7 +232,7 @@ const StockPage = () => { //Defines StockPage as a functional react component
           <StockInfo>
             <StockSymbol>{symbol}</StockSymbol>
           </StockInfo>
-          <BackButton onClick={() => navigate('/')}>Return to Hub</BackButton>
+          <BackButton onClick={() => navigate(-1)}>Return to Hub</BackButton>
         </Header>
         
         <LoadingContainer>
@@ -274,7 +274,7 @@ const StockPage = () => { //Defines StockPage as a functional react component
             </span>
           </StockPrice>
         </StockInfo>
-        <BackButton onClick={() => navigate('/')}>Return to Hub</BackButton>
+        <BackButton onClick={() => navigate(-1)}>Return to Hub</BackButton>
       </Header>
 
       <ChartContainer>
