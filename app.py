@@ -772,22 +772,23 @@ async def get_timeseries(symbol: str, range: str = '1M'):
         start = _compute_start_date(range, now_et)
         # Choose efficient resolutions per range
         def map_resolution(rk: str) -> str:
-            # Finnhub supports: 1, 5, 15, 30, 60, D, W, M
-            # Use these exact values for best results
+            # Finnhub free tier: intraday (1,5,15,30,60) only for current day
+            # For historical ranges, must use D/W/M
+            # Using hourly (60) for 1W, 4-hour blocks for 1M as compromise
             if rk == '1W':
-                return '30'   # 30 minutes
+                return '60'   # hourly for past week
             if rk == '1M':
-                return '60'   # 1 hour (120 not supported by Finnhub, use 60)
+                return 'D'    # daily for past month (intraday not available on free tier)
             if rk in ['3M', '6M']:
                 return 'D'    # daily
             if rk in ['YTD', '1Y']:
                 return 'D'    # daily
             if rk == '2Y':
-                return 'D'    # daily (downsample to 2D client-side if needed)
+                return 'D'    # daily
             if rk == '5Y':
-                return 'D'    # daily (downsample to 5D client-side if needed)
+                return 'D'    # daily
             if rk == '10Y':
-                return 'D'    # daily (downsample to 10D client-side if needed)
+                return 'D'    # daily
             return 'D'
         res = map_resolution(range)
 
