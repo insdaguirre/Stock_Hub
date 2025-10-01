@@ -907,7 +907,13 @@ const HomePage = () => {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1f1f20" />
-                  <XAxis dataKey="xTs" type="number" domain={['dataMin','dataMax']} tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={30}
+                  {(() => {
+                    const firstTs = series.points[0]?.xTs;
+                    const lastPointTs = series.points[series.points.length - 1]?.xTs;
+                    const asOfTs = intraday && intraday.asOf ? new Date(intraday.asOf).getTime() : lastPointTs;
+                    const maxTs = Math.min(asOfTs || lastPointTs || Date.now(), lastPointTs || asOfTs || Date.now());
+                    return (
+                      <XAxis dataKey="xTs" type="number" domain={[firstTs || 'dataMin', maxTs]} tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={30}
                     tickFormatter={(ts) => {
                       const d = new Date(ts);
                       if (range === '1D') {
@@ -919,6 +925,8 @@ const HomePage = () => {
                       return d.toLocaleDateString([], { month: '2-digit', day: '2-digit' });
                     }}
                   />
+                    );
+                  })()}
                   <YAxis dataKey="price" tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} domain={['auto','auto']} />
                   <Tooltip contentStyle={{ background: '#111113', border: '1px solid #1F1F20', color: '#fff' }} labelStyle={{ color: '#C7C7CC' }}
                     labelFormatter={(ts) => {
