@@ -751,6 +751,7 @@ async def get_timeseries(symbol: str, range: str = '1M'):
                 )
                 js = requests.get(url, timeout=15).json()
                 if js.get('s') != 'ok':
+                    print(json.dumps({"route": "finnhub_candles", "symbol": symbol, "resolution": resolution, "status": js.get('s'), "error": js.get('error', 'no_data')}))
                     return None
                 times = js.get('t') or []
                 closes = js.get('c') or []
@@ -762,8 +763,10 @@ async def get_timeseries(symbol: str, range: str = '1M'):
                         out.append({"date": dt.isoformat(), "price": float(c_i)})
                     else:
                         out.append({"date": dt.strftime('%Y-%m-%d'), "price": float(c_i)})
+                print(json.dumps({"route": "finnhub_candles", "symbol": symbol, "resolution": resolution, "status": "ok", "count": len(out)}))
                 return out
-            except Exception:
+            except Exception as e:
+                print(json.dumps({"route": "finnhub_candles", "symbol": symbol, "resolution": resolution, "error": str(e)}))
                 return None
 
         start = _compute_start_date(range, now_et)
