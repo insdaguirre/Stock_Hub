@@ -683,10 +683,12 @@ const HomePage = () => {
   useEffect(() => {
     let mounted = true;
     const load = async () => {
+      let intrResp = null;
       try {
         const intr = await getIntraday(selectedSymbol);
         if (!mounted) return;
         setIntraday(intr);
+        intrResp = intr;
       } catch (_) {}
       try {
         const ov = await getOverview(selectedSymbol);
@@ -709,8 +711,8 @@ const HomePage = () => {
         });
         // Clamp intraday series to API asOf time
         try {
-          if (intraday && intraday.market === 'open' && intraday.asOf) {
-            const asOfTs = new Date(intraday.asOf).getTime();
+          if (intrResp && intrResp.market === 'open' && intrResp.asOf) {
+            const asOfTs = new Date(intrResp.asOf).getTime();
             pts = pts.filter(p => typeof p.xTs === 'number' && p.xTs <= asOfTs);
           }
         } catch (_) {}
