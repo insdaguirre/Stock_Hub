@@ -750,7 +750,7 @@ const HomePage = () => {
     if (n == null || isNaN(n)) return '—';
     const v = Number(n);
     const sign = v >= 0 ? '+' : '';
-    return `${sign}${v.toFixed(2)}%`;
+    return `${sign}${Math.abs(v).toFixed(2)}%`;
   };
 
   // Return three prediction columns (1D, 2D, 1W) plus accuracy
@@ -765,7 +765,7 @@ const HomePage = () => {
       d1: oneDay ? Number(oneDay.change_percent) : null,
       d2: twoDay ? Number(twoDay.change_percent) : null,
       w1: oneWeek ? Number(oneWeek.change_percent) : null,
-      accuracy: `${model.accuracy}%`
+      accuracy: `${Number(model.accuracy ?? 0).toFixed(2)}%`
     };
   };
 

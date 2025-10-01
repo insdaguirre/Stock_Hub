@@ -150,6 +150,14 @@ const StockPage = () => { //Defines StockPage as a functional react component
   const [predictionProgress, setPredictionProgress] = useState(0);
   const [dataLoadingProgress, setDataLoadingProgress] = useState(0);
 
+  // Helpers
+  const formatPct = (n) => {
+    if (n == null || isNaN(n)) return '—';
+    const v = Number(n);
+    const sign = v >= 0 ? '+' : '';
+    return `${sign}${Math.abs(v).toFixed(2)}%`;
+  };
+
   const simulateProgress = () => {
     const dataLoadingTime = 2; // seconds
     const predictionTime = 5; // seconds
@@ -224,7 +232,7 @@ const StockPage = () => { //Defines StockPage as a functional react component
           <StockInfo>
             <StockSymbol>{symbol}</StockSymbol>
           </StockInfo>
-          <BackButton onClick={() => navigate('/')}>Back to Search</BackButton>
+          <BackButton onClick={() => navigate('/')}>Return to Hub</BackButton>
         </Header>
         
         <LoadingContainer>
@@ -266,7 +274,7 @@ const StockPage = () => { //Defines StockPage as a functional react component
             </span>
           </StockPrice>
         </StockInfo>
-        <BackButton onClick={() => navigate('/')}>Back to Search</BackButton>
+        <BackButton onClick={() => navigate('/')}>Return to Hub</BackButton>
       </Header>
 
       <ChartContainer>
@@ -300,15 +308,28 @@ const StockPage = () => { //Defines StockPage as a functional react component
         <ModelTitle>{currentModel.name}</ModelTitle>
         <p>{currentModel.description}</p>
         <MetricsGrid>
-          <Metric>
-            <MetricLabel>Prediction (7d)</MetricLabel>
-            <MetricValue isPositive={(predictions.models[modelId]?.change_percent || 0) > 0} isNegative={(predictions.models[modelId]?.change_percent || 0) < 0}>
-              {((predictions.models[modelId]?.change_percent) ?? 0).toFixed(2)}%
-            </MetricValue>
-          </Metric>
+          {(() => {
+            const model = predictions.models[modelId] || {};
+            const oneDay = model.predictions_1d || predictions?.multiTimeframe?.oneDay || null;
+            const twoDay = model.predictions_2d || predictions?.multiTimeframe?.twoDay || null;
+            const oneWeek = model.predictions_1w || predictions?.multiTimeframe?.oneWeek || null;
+            const vals = [
+              { label: 'Prediction (1D)', val: oneDay ? Number(oneDay.change_percent) : null },
+              { label: 'Prediction (2D)', val: twoDay ? Number(twoDay.change_percent) : null },
+              { label: 'Prediction (1W)', val: oneWeek ? Number(oneWeek.change_percent) : null },
+            ];
+            return vals.map(({ label, val }) => (
+              <Metric key={label}>
+                <MetricLabel>{label}</MetricLabel>
+                <MetricValue isPositive={(val ?? 0) > 0} isNegative={(val ?? 0) < 0}>
+                  {formatPct(val)}
+                </MetricValue>
+              </Metric>
+            ));
+          })()}
           <Metric>
             <MetricLabel>Model Accuracy</MetricLabel>
-            <MetricValue>{predictions.models[modelId]?.accuracy ?? 0}%</MetricValue>
+            <MetricValue>{Number(predictions.models[modelId]?.accuracy ?? 0).toFixed(2)}%</MetricValue>
           </Metric>
           <Metric>
             <MetricLabel>Confidence Score</MetricLabel>

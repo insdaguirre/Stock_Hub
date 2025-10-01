@@ -26,11 +26,14 @@ const ProgressLabel = styled.div`
 `;
 
 const ProgressBar = ({ progress, label, timeRemaining }) => {
+  const pctDisplay = Number.isFinite(progress)
+    ? (Math.round(progress * 100) / 100).toFixed(2)
+    : '0.00';
   return (
     <div>
       <ProgressLabel>
         <span>{label}</span>
-        <span>{timeRemaining ? `${timeRemaining}s remaining` : `${progress}% complete`}</span>
+        <span>{timeRemaining ? `${timeRemaining}s remaining` : `${pctDisplay}% complete`}</span>
       </ProgressLabel>
       <ProgressBarContainer>
         <ProgressFill progress={progress} />
