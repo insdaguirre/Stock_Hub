@@ -797,7 +797,7 @@ const HomePage = () => {
     const realign = setTimeout(() => {
       clearInterval(id);
       id = setInterval(load, computeIntervalMs());
-    }, Math.max(5_000, topOfHourMs));
+    }, Math.max(5000, topOfHourMs));
     return () => { mounted = false; clearInterval(id); clearTimeout(realign); };
   }, []);
 
