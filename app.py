@@ -124,11 +124,41 @@ def _throttle(symbol: str, window_seconds: int = 5):
     except Exception:
         return
 
+def _rate_allow(provider: str, limit: int, window_sec: int = 60) -> bool:
+    """Global token-bucket in Redis. Returns True if allowed, else False.
+    Uses rl:{provider}:min with EX=window_sec and INCR.
+    """
+    if not redis_client:
+        return True
+    key = f"rl:{provider}:min"
+    try:
+        cnt = redis_client.incr(key)
+        if cnt == 1:
+            redis_client.expire(key, window_sec)
+        allowed = cnt <= limit
+        if not allowed:
+            try:
+                print(json.dumps({"route": "rate_deny", "provider": provider, "count": int(cnt)}))
+            except Exception:
+                pass
+        return allowed
+    except Exception:
+        return True
+
 def _request_with_backoff(url, max_retries=3):
-    """Perform a GET with simple exponential backoff for AV rate limits."""
+    """Perform a GET with simple exponential backoff for AV rate limits.
+    Also enforces a global token bucket (small AV budget).
+    """
     backoff = 1
     last_err = None
     for _ in range(max_retries):
+        # Global AV budget: allow very small rate
+        if not _rate_allow('av', limit=5, window_sec=60):
+            # deny politely: short sleep and try again, or return immediately on last
+            time.sleep(backoff)
+            backoff = min(8, backoff * 2)
+            last_err = HTTPException(status_code=429, detail='Rate limited by provider (av, budget)')
+            continue
         try:
             resp = requests.get(url, timeout=15)
             # Alpha Vantage sometimes returns 200 with a "Note" when throttled
@@ -184,6 +214,8 @@ def _fetch_news_finnhub(symbol: Optional[str] = None, limit: int = 6):
     if not FINNHUB_API_KEY:
         return []
     try:
+        if not _rate_allow('finnhub', limit=60, window_sec=60):
+            return []
         if symbol:
             # company news for last 14 days
             today = datetime.utcnow().date()
@@ -214,6 +246,8 @@ def _fetch_news_alphavantage(symbol: Optional[str] = None, limit: int = 6):
     if not ALPHA_VANTAGE_API_KEY:
         return []
     try:
+        if not _rate_allow('av', limit=5, window_sec=60):
+            return []
         base = "https://www.alphavantage.co/query?function=NEWS_SENTIMENT"
         params = []
         if symbol:
@@ -298,6 +332,17 @@ def fetch_stock_data(symbol, full: bool = False):
 
     outsize = 'full' if full else 'compact'
     url = f'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}&outputsize={outsize}'
+    if not _rate_allow('av', limit=5, window_sec=60):
+        # serve from cache if possible
+        cached2 = _cache_get(cache_key)
+        if cached2:
+            try:
+                payload = json.loads(cached2)
+                return payload
+            except Exception:
+                pass
+        # gentle fail
+        raise HTTPException(status_code=429, detail='Rate limited by provider (av, budget)')
     data = _request_with_backoff(url)
     AV_CALLS.labels(type='daily').inc()
     
@@ -336,6 +381,8 @@ def fetch_global_quote(symbol):
     # Prefer Finnhub when available
     if FINNHUB_API_KEY:
         try:
+            if not _rate_allow('finnhub', limit=60, window_sec=60):
+                raise RuntimeError('finnhub_rate_deny')
             url = f"https://finnhub.io/api/v1/quote?symbol={symbol.upper()}&token={FINNHUB_API_KEY}"
             js = requests.get(url, timeout=12).json()
             price = float(js.get('c') or 0)
@@ -347,6 +394,15 @@ def fetch_global_quote(symbol):
         except Exception:
             pass
 
+    if not _rate_allow('av', limit=5, window_sec=60):
+        cached = _cache_get(cache_key)
+        if cached:
+            try:
+                js = json.loads(cached)
+                return float(js['price']), float(js['previousClose'])
+            except Exception:
+                pass
+        raise HTTPException(status_code=429, detail='Rate limited by provider (av, budget)')
     url = f'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}'
     data = _request_with_backoff(url)
     AV_CALLS.labels(type='quote').inc()
@@ -392,6 +448,8 @@ def fetch_intraday(symbol: str, interval: str = '1min'):
             start = int(day_open.timestamp())
             end_ts = min(day_close, now_et)
             end = int(end_ts.timestamp())
+            if not _rate_allow('finnhub', limit=60, window_sec=60):
+                return []
             url = f"https://finnhub.io/api/v1/stock/candle?symbol={symbol.upper()}&resolution=1&from={start}&to={end}&token={FINNHUB_API_KEY}"
             js = requests.get(url, timeout=15).json()
             if js.get('s') != 'ok':
@@ -429,6 +487,16 @@ def fetch_intraday(symbol: str, interval: str = '1min'):
 
     throttled = _throttle(f"intraday:{symbol}")
 
+    if not _rate_allow('av', limit=5, window_sec=60):
+        cached = _cache_get(cache_key)
+        if cached:
+            try:
+                payload = json.loads(cached)
+                return payload
+            except Exception:
+                pass
+        # Soft-empty structure
+        return {"points": [], "market": 'closed', "asOf": datetime.utcnow().isoformat()}
     url = (
         f"https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY"
         f"&symbol={symbol}&interval={interval}&apikey={ALPHA_VANTAGE_API_KEY}&outputsize=full"
@@ -753,15 +821,51 @@ async def get_timeseries(symbol: str, range: str = '1M'):
     Response: { points: [{date, price}], range }
     """
     try:
+        # Server-side cache (per symbol, range)
+        symbol_u = symbol.upper()
+        cache_key = f"timeseries:{symbol_u}:{range}:v1"
+        # TTL suggestions
+        long_ttl = 12 * 60 * 60  # 12h
+        mid_ttl = 45 * 60        # 45m
+        short_ttl = 10 * 60      # 10m
+        intraday_ttl = 60        # 60s
+        ttl_map = {
+            '1D': intraday_ttl,
+            '1W': short_ttl,
+            '1M': mid_ttl,
+            '3M': mid_ttl,
+            '6M': mid_ttl,
+            'YTD': long_ttl,
+            '1Y': long_ttl,
+            '2Y': long_ttl,
+            '5Y': long_ttl,
+            '10Y': long_ttl,
+        }
+        ttl_seconds = ttl_map.get(range, long_ttl)
+
+        cached = _cache_get(cache_key)
+        if cached:
+            try:
+                js = json.loads(cached)
+                print(json.dumps({"route": "/api/timeseries", "symbol": symbol_u, "range": range, "cache_hit": True}))
+                return js
+            except Exception:
+                pass
+
         et = ZoneInfo('America/New_York')
         now_et = datetime.now(et)
         if range == '1D':
             intr = fetch_intraday(symbol)
-            return {"points": intr.get('points', []), "range": '1D'}
+            result_1d = {"points": intr.get('points', []), "range": '1D'}
+            _cache_set(cache_key, json.dumps(result_1d), ttl_seconds=ttl_seconds)
+            print(json.dumps({"route": "/api/timeseries", "symbol": symbol_u, "range": range, "cache_hit": False}))
+            return result_1d
 
         # Prefer Finnhub candles for broader ranges to avoid AV rate limits
         def finnhub_candles(start_dt: datetime, end_dt: datetime, resolution: str):
             if not FINNHUB_API_KEY:
+                return None
+            if not _rate_allow('finnhub', limit=60, window_sec=60):
                 return None
             try:
                 url = (
@@ -822,7 +926,10 @@ async def get_timeseries(symbol: str, range: str = '1M'):
             if res in ['2D', '5D', '10D']:
                 n = 2 if res == '2D' else 5 if res == '5D' else 10
                 fh = fh[::n]
-            return {"points": fh, "range": range}
+            out = {"points": fh, "range": range}
+            _cache_set(cache_key, json.dumps(out), ttl_seconds=ttl_seconds)
+            print(json.dumps({"route": "/api/timeseries", "symbol": symbol_u, "range": range, "cache_hit": False}))
+            return out
 
         # Fallback to Alpha Vantage daily when Finnhub down
         try:
@@ -847,10 +954,16 @@ async def get_timeseries(symbol: str, range: str = '1M'):
                 }
                 n = fallback_counts.get(range, 60)
                 pts = data[-min(len(data), n):]
-            return {"points": pts, "range": range}
+            out2 = {"points": pts, "range": range}
+            _cache_set(cache_key, json.dumps(out2), ttl_seconds=ttl_seconds)
+            print(json.dumps({"route": "/api/timeseries", "symbol": symbol_u, "range": range, "cache_hit": False}))
+            return out2
         except Exception:
             # As a last resort, return an empty series so the UI doesn't explode
-            return {"points": [], "range": range}
+            out_empty = {"points": [], "range": range}
+            _cache_set(cache_key, json.dumps(out_empty), ttl_seconds=ttl_seconds)
+            print(json.dumps({"route": "/api/timeseries", "symbol": symbol_u, "range": range, "cache_hit": False, "error": "fallback_empty"}))
+            return out_empty
     except HTTPException:
         raise
     except Exception as e:
