@@ -284,9 +284,12 @@ const StockPage = () => { //Defines StockPage as a functional react component
             <XAxis dataKey="date" tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={30} />
             <YAxis tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} domain={["auto","auto"]} />
             <Tooltip contentStyle={{ background: '#111113', border: '1px solid #1F1F20', color: '#fff' }} labelStyle={{ color: '#C7C7CC' }} />
-            <Legend wrapperStyle={{ color: '#C7C7CC' }} />
+            <Legend wrapperStyle={{ color: '#C7C7CC' }} payload={[
+              { value: 'Historical Price', type: 'line', id: 'legend-price', color: '#C7C7CC' },
+              { value: 'Prediction', type: 'diamond', id: 'legend-prediction', color: '#34C759' },
+            ]} />
             <Line type="monotone" dataKey="price" stroke="#C7C7CC" name="Historical Price" strokeWidth={2} dot={{ r: 1.8, stroke: '#C7C7CC' }} />
-            <Line type="monotone" dataKey="prediction" stroke="#34C759" name="Prediction" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 4, stroke: '#34C759', strokeWidth: 2 }} activeDot={{ r: 5, stroke: '#34C759', strokeWidth: 2 }} />
+            <Line type="monotone" dataKey="prediction" stroke="#34C759" name="Prediction" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 6, stroke: '#34C759', strokeWidth: 2, fill: '#34C759' }} activeDot={{ r: 7, stroke: '#34C759', strokeWidth: 2, fill: '#34C759' }} />
           </LineChart>
         </ResponsiveContainer>
       </ChartContainer>

@@ -755,6 +755,8 @@ useEffect(() => {
       } catch (_) {}
 
       seriesCacheRef.current['1D'] = pts || [];
+      // Persist short-lived 1D cache to enable instant hydration on back nav
+      try { saveToStorage(selectedSymbol, '1D', pts || []); } catch (_) {}
       setSeries({ points: pts || [] });
       // background prefetch
       ['1W','1M','3M'].forEach(async (r) => {
@@ -942,9 +944,7 @@ useEffect(() => {
                     } catch (_) {}
                   }
                   seriesCacheRef.current[r] = pts;
-                  if (r !== '1D') {
-                    saveToStorage(selectedSymbol, r, pts);
-                  }
+                  saveToStorage(selectedSymbol, r, pts);
                   setSeries({ points: pts });
                 } catch (_) {}
               }}>{r}</RangeTab>
