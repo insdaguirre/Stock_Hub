@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from 'react'; //React is the core library for building UI's
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'; //A react hook for performing side effects in functional components
 import styled from 'styled-components';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Dot } from 'recharts'; //A library for building charts in react
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'; //A library for building charts in react
 import { getStockData, getPredictions } from '../services/api'; //Functions ipported from an API service module to fetch stock data and predictions
 import ProgressBar from './ProgressBar';
 
