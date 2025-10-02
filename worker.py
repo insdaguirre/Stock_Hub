@@ -7,6 +7,7 @@ from rq import Queue
 import app as app_module
 from storage import load_model_bytes, save_model_bytes
 import pickle
+import io
 import os
 import json
 import requests
@@ -32,10 +33,22 @@ def _simple_predict(prices, window: int, days_ahead: int) -> float:
     trend = (segment[-1] - segment[0]) / max(1, (len(segment) - 1))
     return max(0.0, ma + days_ahead * trend)
 
-def _arima_predict(prices, steps: int) -> float:
+def _arima_predict(symbol: str, version: str, prices, steps: int) -> float:
+    """Prefer S3 artifact; fallback to quick on-the-fly fit."""
+    # 1) Try artifact
+    try:
+        blob = load_model_bytes(symbol, "arima", version)
+        if blob:
+            from statsmodels.tsa.arima.model import ARIMAResults
+            buf = io.BytesIO(blob)
+            results = ARIMAResults.load(buf)
+            fc = results.forecast(steps=steps)
+            return float(fc[-1])
+    except Exception:
+        pass
+    # 2) Fallback: quick fit
     try:
         from statsmodels.tsa.arima.model import ARIMA
-        # conservative order to avoid overfit and keep it fast on CPU
         model = ARIMA(prices, order=(2,1,1))
         fitted = model.fit(method_kwargs={"warn_convergence": False})
         fc = fitted.forecast(steps=steps)
@@ -102,9 +115,9 @@ def job_predict_next(symbol: str):
     xgb_1d, xgb_2d, xgb_7d = _xgb_from_s3()
 
     # Model 5: ARIMA real forecast
-    ar_1d = _arima_predict(prices, steps=1)
-    ar_2d = _arima_predict(prices, steps=2)
-    ar_7d = _arima_predict(prices, steps=7)
+    ar_1d = _arima_predict(symbol, version, prices, steps=1)
+    ar_2d = _arima_predict(symbol, version, prices, steps=2)
+    ar_7d = _arima_predict(symbol, version, prices, steps=7)
 
     models = {
         1: {
