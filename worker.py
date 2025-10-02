@@ -15,6 +15,7 @@ from prometheus_client import Counter
 import boto3
 
 JOB_FAILURES = Counter('worker_job_failures_total', 'Worker job failures', ['task'])
+MODEL_SOURCE = Counter('model_source_total', 'Model inference source', ['model', 'source'])
 
 
 def _get_queue():
@@ -33,8 +34,10 @@ def _simple_predict(prices, window: int, days_ahead: int) -> float:
     trend = (segment[-1] - segment[0]) / max(1, (len(segment) - 1))
     return max(0.0, ma + days_ahead * trend)
 
-def _arima_predict(symbol: str, version: str, prices, steps: int) -> float:
-    """Prefer S3 artifact; fallback to quick on-the-fly fit."""
+def _arima_predict(symbol: str, version: str, prices, steps: int):
+    """Prefer S3 artifact; fallback to quick on-the-fly fit.
+    Returns: (price: float, source: str) where source in {"s3","fit","simple"}
+    """
     # 1) Try artifact
     try:
         blob = load_model_bytes(symbol, "arima", version)
@@ -43,7 +46,8 @@ def _arima_predict(symbol: str, version: str, prices, steps: int) -> float:
             buf = io.BytesIO(blob)
             results = ARIMAResults.load(buf)
             fc = results.forecast(steps=steps)
-            return float(fc[-1])
+            MODEL_SOURCE.labels(model='arima', source='s3').inc()
+            return float(fc[-1]), 's3'
     except Exception:
         pass
     # 2) Fallback: quick fit
@@ -52,10 +56,12 @@ def _arima_predict(symbol: str, version: str, prices, steps: int) -> float:
         model = ARIMA(prices, order=(2,1,1))
         fitted = model.fit(method_kwargs={"warn_convergence": False})
         fc = fitted.forecast(steps=steps)
-        return float(fc[-1])
+        MODEL_SOURCE.labels(model='arima', source='fit').inc()
+        return float(fc[-1]), 'fit'
     except Exception:
         # fallback to simple predictor if ARIMA not available
-        return _simple_predict(prices, window=7, days_ahead=steps)
+        MODEL_SOURCE.labels(model='arima', source='simple').inc()
+        return _simple_predict(prices, window=7, days_ahead=steps), 'simple'
 
 def job_predict_next(symbol: str):
     """Compute multi-model predictions using lightweight algorithms.
@@ -115,9 +121,10 @@ def job_predict_next(symbol: str):
     xgb_1d, xgb_2d, xgb_7d = _xgb_from_s3()
 
     # Model 5: ARIMA real forecast
-    ar_1d = _arima_predict(symbol, version, prices, steps=1)
-    ar_2d = _arima_predict(symbol, version, prices, steps=2)
-    ar_7d = _arima_predict(symbol, version, prices, steps=7)
+    ar_1d, src1 = _arima_predict(symbol, version, prices, steps=1)
+    ar_2d, src2 = _arima_predict(symbol, version, prices, steps=2)
+    ar_7d, src3 = _arima_predict(symbol, version, prices, steps=7)
+    ar_src = 's3' if (src1 == src2 == src3 == 's3') else ('fit' if (src1 == src2 == src3 == 'fit') else 'mixed')
 
     models = {
         1: {
@@ -159,6 +166,7 @@ def job_predict_next(symbol: str):
             "predictions_1d": pack(1, ar_1d),
             "predictions_2d": pack(2, ar_2d),
             "predictions_1w": pack(7, ar_7d),
+            "source": ar_src,
         },
     }
 
@@ -174,6 +182,16 @@ def job_predict_next(symbol: str):
     pred_key = f"pred:simple:{version}:{symbol}"
     if app_module.redis_client:
         app_module.redis_client.set(pred_key, json.dumps(response), ex=60 * 60)
+    # structured log for observability
+    try:
+        print(json.dumps({
+            "route": "worker_predict",
+            "symbol": symbol,
+            "arima_source": ar_src,
+            "cached": False
+        }))
+    except Exception:
+        pass
     return response
 
 
