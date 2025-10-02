@@ -2,6 +2,7 @@ import os
 import json
 import sys
 from typing import List
+import io
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
@@ -21,8 +22,11 @@ def train_arima(symbol: str, version: str) -> bytes:
     prices = [p["price"] for p in hist]
     if not HAS_STATS or len(prices) < 10:
         raise RuntimeError("statsmodels missing or not enough data for ARIMA")
-    model = ARIMA(prices, order=(2,1,1)).fit(method_kwargs={"warn_convergence": False})
-    return model.save(None)  # statsmodels result has save to file-like; None returns bytes in newer versions
+    results = ARIMA(prices, order=(2,1,1)).fit(method_kwargs={"warn_convergence": False})
+    # Persist to in-memory bytes buffer (file-like object)
+    buf = io.BytesIO()
+    results.save(buf)
+    return buf.getvalue()
 
 
 def main(symbols: List[str]):
