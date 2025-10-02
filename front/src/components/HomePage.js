@@ -663,6 +663,12 @@ useEffect(() => {
       setLastUpdated(new Date());
       setPredictionsData(data);
       // Chart data is fetched separately on symbol change
+      // Ensure intraday chart does not disappear after predictions complete
+      setSeries(prev => {
+        if (prev && prev.points && prev.points.length >= 2) return prev;
+        const cached = seriesCacheRef.current[range] || seriesCacheRef.current['1D'] || [];
+        return { points: cached };
+      });
       
       // Ensure we show 100% progress before stopping
       setLoadingProgress(prev => {

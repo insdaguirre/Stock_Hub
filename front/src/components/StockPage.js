@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from 'react'; //React is the core library for building UI's
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'; //A react hook for performing side effects in functional components
 import styled from 'styled-components';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'; //A library for building charts in react
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Dot } from 'recharts'; //A library for building charts in react
 import { getStockData, getPredictions } from '../services/api'; //Functions ipported from an API service module to fetch stock data and predictions
 import ProgressBar from './ProgressBar';
 
@@ -135,6 +135,18 @@ const models = {
     description: 'Gradient boosting model optimized for speed and performance',
     metrics: ['Accuracy', 'RMSE', 'Feature Impact']
   }
+};
+
+// Diamond-shaped dot for prediction points
+const DiamondDot = ({ cx, cy, large }) => {
+  const size = large ? 7 : 5;
+  const half = size / 2;
+  if (typeof cx !== 'number' || typeof cy !== 'number') return null;
+  return (
+    <svg x={cx - half} y={cy - half} width={size} height={size} viewBox="0 0 10 10">
+      <polygon points="5,0 10,5 5,10 0,5" fill="#34C759" stroke="#34C759" strokeWidth="1" />
+    </svg>
+  );
 };
 
 const StockPage = () => { //Defines StockPage as a functional react component
@@ -279,7 +291,7 @@ const StockPage = () => { //Defines StockPage as a functional react component
 
       <ChartContainer>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={[...stockData.historicalData, { date: predictions.nextDate, prediction: predictions.models[modelId]?.prediction }]} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+          <LineChart data={[...stockData.historicalData.map(p => ({ date: p.date, price: p.price })), { date: predictions.nextDate, prediction: predictions.models[modelId]?.prediction }]} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1f1f20" />
             <XAxis dataKey="date" tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={30} />
             <YAxis tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} domain={["auto","auto"]} />
@@ -289,7 +301,7 @@ const StockPage = () => { //Defines StockPage as a functional react component
               { value: 'Prediction', type: 'diamond', id: 'legend-prediction', color: '#34C759' },
             ]} />
             <Line type="monotone" dataKey="price" stroke="#C7C7CC" name="Historical Price" strokeWidth={2} dot={{ r: 1.8, stroke: '#C7C7CC' }} />
-            <Line type="monotone" dataKey="prediction" stroke="#34C759" name="Prediction" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 6, stroke: '#34C759', strokeWidth: 2, fill: '#34C759' }} activeDot={{ r: 7, stroke: '#34C759', strokeWidth: 2, fill: '#34C759' }} />
+            <Line type="monotone" dataKey="prediction" stroke="#34C759" name="Prediction" strokeWidth={2} strokeDasharray="5 5" dot={<DiamondDot />} activeDot={<DiamondDot large />} />
           </LineChart>
         </ResponsiveContainer>
       </ChartContainer>
