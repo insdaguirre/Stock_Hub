@@ -1,10 +1,20 @@
 # Stock Hub
 
-End-to-end stock prediction demo with a React frontend, FastAPI backend on Railway, Redis caching + RQ worker queue, AWS S3 model storage, and optional AWS SNS/webhook alerts. Alpha Vantage provides market data. Prometheus metrics are exposed for monitoring.
+A comprehensive stock prediction platform featuring a React frontend, FastAPI backend deployed on Railway, Redis caching with RQ worker queue, AWS S3 model storage, and real-time market data integration. The system combines multiple machine learning models to provide stock price predictions with varying time horizons.
 
-This repository contains both the backend API and the demo frontend app.
+This repository contains both the backend API and the demo frontend app, designed as a full-stack demonstration of modern financial technology architecture.
 
-> Development-only: This is a demo build intended for development and educational purposes. Model outputs are illustrative and not investment advice. Do not use in production without hardening security, rate limiting, costs, and reliability.
+> **Important**: This is a development and educational project. Model outputs are illustrative and not investment advice. The system uses free API tiers which may cause occasional errors due to rate limits. Do not use in production without proper security hardening, rate limiting, and reliability improvements.
+
+## Current System Status
+
+**Data Sources**: Alpha Vantage (primary) and Finnhub (secondary) for market data and news  
+**Models**: Currently ARIMA is the only model that gets trained; others use placeholder algorithms  
+**Training**: Weekly automated training via Railway worker  
+**Storage**: AWS S3 for model artifacts and Redis for caching  
+**Deployment**: Railway with separate web and worker processes  
+
+**⚠️ Data Bottleneck**: This project relies on free API tiers from Alpha Vantage and Finnhub. Errors may occur due to rate limits, especially during high-traffic periods. The system gracefully handles these limitations with fallback mechanisms and caching.
 
 ---
 
@@ -25,48 +35,200 @@ This repository contains both the backend API and the demo frontend app.
 
 ## System Overview
 
-High-level architecture showing how the frontend, backend, caching, storage, and third-party APIs interact:
+### Information Flow Architecture
+
+The system processes data through multiple stages, from data ingestion to prediction delivery:
 
 ```mermaid
-flowchart LR
-  subgraph Client
-    FE[React Frontend]
-  end
+flowchart TD
+    subgraph "Data Sources"
+        AV[Alpha Vantage API<br/>Primary Data Source]
+        FH[Finnhub API<br/>Secondary Data Source]
+    end
+    
+    subgraph "Railway Deployment"
+        subgraph "Web Process"
+            API[FastAPI Web Server<br/>Port 8000]
+        end
+        
+        subgraph "Worker Process"
+            WKR[RQ Background Worker<br/>Model Training & Inference]
+        end
+        
+        REDIS[(Redis Cache<br/>Jobs & Data Storage)]
+    end
+    
+    subgraph "Storage & Monitoring"
+        S3[(AWS S3 Bucket<br/>Model Artifacts)]
+        SNS[AWS SNS<br/>Failure Alerts]
+        PM[Prometheus Metrics<br/>/metrics endpoint]
+    end
+    
+    subgraph "Client Applications"
+        FE[React Frontend<br/>GitHub Pages]
+        MOBILE[Mobile/Desktop<br/>API Consumers]
+    end
+    
+    %% Data Flow
+    AV -->|Market Data| API
+    FH -->|News & Quotes| API
+    API -->|Cache Lookup| REDIS
+    API -->|Job Enqueue| REDIS
+    REDIS -->|Process Jobs| WKR
+    WKR -->|Fetch Historical Data| AV
+    WKR -->|Load/Save Models| S3
+    WKR -->|Failure Notifications| SNS
+    
+    %% Client Interactions
+    FE -->|HTTPS Requests| API
+    MOBILE -->|API Calls| API
+    API -->|Metrics Data| PM
+    
+    %% Caching
+    REDIS -.->|Cache Miss| API
+    API -.->|Cache Store| REDIS
+    
+    %% Styling
+    classDef dataSource fill:#e1f5fe
+    classDef railway fill:#f3e5f5
+    classDef storage fill:#e8f5e8
+    classDef client fill:#fff3e0
+    
+    class AV,FH dataSource
+    class API,WKR,REDIS railway
+    class S3,SNS,PM storage
+    class FE,MOBILE client
+```
 
-  subgraph Railway
-    API[FastAPI Web]
-    WKR[RQ Worker]
-    REDIS[(Redis)]
-  end
+### Repository Structure & Component Interaction
 
-  AV[Alpha Vantage API]
-  S3[(AWS S3 Bucket)]
-  SNS[AWS SNS]
-  PM[Prometheus / Scraper]
+How the different pieces of the codebase work together:
 
-  FE -->|HTTPS /api/*| API
-  API <-->|cache get/set| REDIS
-  API -->|/api/stock -> GLOBAL_QUOTE| AV
-  API -->|/api/predictions may enqueue| REDIS
-  REDIS -->|jobs| WKR
-  WKR -->|fetch historical -> TIME_SERIES_DAILY| AV
-  WKR -->|load/save artifacts| S3
-  WKR -->|alerts on failure| SNS
-  API -->|/metrics| PM
-  FE -->|poll /api/jobs/:id| API
+```mermaid
+graph TB
+    subgraph "Frontend (React)"
+        FE_APP[App.js<br/>Main Application]
+        FE_HOME[HomePage.js<br/>News & Predictions UI]
+        FE_STOCK[StockPage.js<br/>Detailed Analysis]
+        FE_API[api.js<br/>API Client Layer]
+    end
+    
+    subgraph "Backend (FastAPI)"
+        MAIN_APP[app.py<br/>Main API Server]
+        WORKER[worker.py<br/>Background Jobs]
+        STORAGE[storage.py<br/>S3 Integration]
+        SETTINGS[settings.py<br/>Configuration]
+    end
+    
+    subgraph "Model Training"
+        TRAINER[scripts/train_models.py<br/>Weekly Training Job]
+        ARIMA_MODEL[models/arima_model.py<br/>ARIMA Implementation]
+        OTHER_MODELS[models/*.py<br/>Future Model Placeholders]
+    end
+    
+    subgraph "Infrastructure"
+        PROCFILE[Procfile<br/>Railway Process Definition]
+        REQUIREMENTS[requirements.txt<br/>Python Dependencies]
+        RUNTIME[runtime.txt<br/>Python Version]
+    end
+    
+    subgraph "External Services"
+        AV_API[Alpha Vantage API]
+        FH_API[Finnhub API]
+        REDIS_SERVICE[Redis Service]
+        S3_SERVICE[AWS S3]
+    end
+    
+    %% Frontend to Backend
+    FE_API -->|HTTP Requests| MAIN_APP
+    FE_HOME -->|UI Components| FE_APP
+    FE_STOCK -->|UI Components| FE_APP
+    
+    %% Backend Internal
+    MAIN_APP -->|Job Enqueue| WORKER
+    MAIN_APP -->|Data Storage| STORAGE
+    WORKER -->|Model Loading| STORAGE
+    TRAINER -->|Model Training| ARIMA_MODEL
+    TRAINER -->|Artifact Upload| STORAGE
+    
+    %% External Integrations
+    MAIN_APP -->|Market Data| AV_API
+    MAIN_APP -->|News Data| FH_API
+    MAIN_APP -->|Caching| REDIS_SERVICE
+    STORAGE -->|Model Storage| S3_SERVICE
+    WORKER -->|Model Storage| S3_SERVICE
+    
+    %% Configuration
+    PROCFILE -.->|Process Definition| MAIN_APP
+    PROCFILE -.->|Process Definition| WORKER
+    REQUIREMENTS -.->|Dependencies| MAIN_APP
+    REQUIREMENTS -.->|Dependencies| WORKER
+    REQUIREMENTS -.->|Dependencies| TRAINER
+    
+    %% Styling
+    classDef frontend fill:#e3f2fd
+    classDef backend fill:#f1f8e9
+    classDef models fill:#fff8e1
+    classDef infra fill:#fce4ec
+    classDef external fill:#f3e5f5
+    
+    class FE_APP,FE_HOME,FE_STOCK,FE_API frontend
+    class MAIN_APP,WORKER,STORAGE,SETTINGS backend
+    class TRAINER,ARIMA_MODEL,OTHER_MODELS models
+    class PROCFILE,REQUIREMENTS,RUNTIME infra
+    class AV_API,FH_API,REDIS_SERVICE,S3_SERVICE external
 ```
 
 ---
 
 ## Features
 
-- **Live API** on Railway with separate Web and Worker dynos (via `Procfile`)
-- **React frontend** (SPA) consuming the API with job polling
-- **Redis caching** for Alpha Vantage responses and prediction payloads
-- **RQ background jobs** for async prediction computation
-- **AWS S3** for simple model artifact storage
+### Core Platform Features
+- **Live API** on Railway with separate Web and Worker processes (via `Procfile`)
+- **React frontend** (SPA) with responsive design and real-time updates
+- **Redis caching** for API responses, prediction payloads, and job management
+- **RQ background jobs** for asynchronous prediction computation and model training
+- **AWS S3** for model artifact storage and versioning
 - **Optional alerts** via AWS SNS or JSON webhook for worker failures
-- **Prometheus metrics** at `/metrics` and service health at `/api/status`
+- **Prometheus metrics** at `/metrics` and comprehensive health monitoring at `/api/status`
+
+### Market Data & Analysis
+- **Real-time stock quotes** with current price and previous close
+- **Historical data** with multiple time ranges (1D, 1W, 1M, 3M, 6M, YTD, 1Y, 2Y, 5Y, 10Y)
+- **Intraday charts** with minute-by-minute data during market hours
+- **Market overview** including P/E ratio, market cap, 52-week high/low, and other key metrics
+- **Multi-timeframe predictions** (1 day, 2 days, 1 week) for each model
+
+### News & Information
+- **Market news feed** with 6 top stories displayed on homepage
+- **Company-specific news** when searching for individual stocks
+- **Smart refresh cadence**: News updates hourly during market hours (6:00-22:00 local time) and every 2 hours overnight
+- **Multiple news sources**: Finnhub (primary) with Alpha Vantage fallback
+- **Cached news** with 12-hour TTL to reduce API calls and improve performance
+
+### Machine Learning Models
+- **5 Active Models**: LSTM, Random Forest, Prophet, XGBoost, and ARIMA
+- **ARIMA Training**: Currently the only model that gets trained weekly with real data
+- **Placeholder Models**: Other models use sophisticated placeholder algorithms until full implementation
+- **Model Artifacts**: Trained models stored in S3 for faster inference
+- **Accuracy Metrics**: Each model displays confidence and accuracy scores
+- **Multi-timeframe Predictions**: All models provide 1-day, 2-day, and 1-week forecasts
+
+### User Experience
+- **Interactive Charts**: Responsive area charts with multiple time ranges
+- **Real-time Updates**: Live market data and prediction updates
+- **Progress Indicators**: Visual progress bars during model computation
+- **Error Handling**: Graceful fallbacks when APIs are rate-limited
+- **Mobile Responsive**: Optimized for desktop and mobile devices
+- **Caching Strategy**: Client-side caching for improved performance
+
+### Technical Features
+- **Rate Limiting**: Built-in throttling to respect API limits
+- **Fallback Mechanisms**: Multiple data sources to ensure reliability
+- **Background Processing**: Non-blocking prediction computation
+- **Health Monitoring**: Real-time system status indicators
+- **Structured Logging**: Comprehensive logging for debugging and monitoring
+- **CORS Support**: Cross-origin requests for frontend integration
 
 ---
 
@@ -322,19 +484,83 @@ Cache verification:
 
 ---
 
+## Model Implementation Status
+
+### Current Implementation (Phase 1)
+- **ARIMA Model**: Fully implemented with real training and S3 artifact storage
+  - Uses `statsmodels` for time series analysis
+  - Automatically finds optimal parameters using `pmdarima`
+  - Trains weekly via Railway worker process
+  - Stores trained models in S3 for fast inference
+  - Provides 1-day, 2-day, and 1-week predictions
+
+### Placeholder Models (Phase 1)
+- **LSTM Neural Network**: Uses sophisticated moving average + trend algorithm
+- **Random Forest**: Uses windowed moving average with different parameters
+- **Prophet**: Uses extended window analysis for time series patterns
+- **XGBoost**: Uses advanced windowing with trend analysis
+- All placeholder models provide realistic predictions and accuracy metrics
+
+### Future Model Integration (Phases 2-3)
+
+**Phase 2 (Next)**: XGBoost Real Implementation
+- Implement full XGBoost training pipeline
+- Create serialization/deserialization for S3 storage
+- Add model comparison metrics
+- Maintain same artifact format and training workflow
+
+**Phase 3**: Additional Models
+- **Random Forest**: Full implementation with feature engineering
+- **Prophet**: Time series forecasting with seasonality detection
+- **LSTM**: Deep learning implementation (if computational requirements allow)
+- **Ensemble Methods**: Combine multiple models for improved accuracy
+
+### Gradual Integration Strategy
+- Models will be integrated one at a time to ensure stability
+- Each new model follows the same artifact storage pattern
+- Training scripts will be extended to support multiple model types
+- Worker processes will be updated to handle new model types
+- Frontend will automatically display new models as they become available
+
+### Data Bottleneck Considerations
+The current system is designed to work within free API tier limitations:
+- **Alpha Vantage**: 5 calls per minute, 500 calls per day (free tier)
+- **Finnhub**: 60 calls per minute (free tier)
+- **Caching Strategy**: Aggressive caching reduces API calls by 80-90%
+- **Fallback Mechanisms**: Multiple data sources ensure reliability
+- **Rate Limiting**: Built-in throttling prevents API overuse
+- **Error Handling**: Graceful degradation when limits are reached
+
+---
+
 ## Future Updates
 
-- Expand real model training/inference (beyond demo simple predictor) and persist per-symbol artifacts
-- Lengthen prediction range, add visuals
-- Refine the front-end and overall user experience 
-- Intelligent cache invalidation and prewarming jobs (e.g., daily scheduler)
-- Stronger rate limiting and retries around Alpha Vantage usage
-- Robust CI/CD (lint, type check, tests, Docker images, preview deploys)
-- IaC for infra (Redis, S3, Railway) and secrets management
-- AuthN/Z and per-user rate limits; API keys for paid tiers
-- Structured logging, tracing, dashboards, and alerts (Grafana/Tempo/Promtail)
-- E2E tests for frontend + backend (Playwright/Cypress)
-- Multi-model ensemble and backtesting UI
+### Short Term (Next 3 months)
+- Implement XGBoost real training and inference
+- Add model performance comparison dashboard
+- Implement intelligent cache prewarming
+- Add more comprehensive error handling and retry logic
+
+### Medium Term (3-6 months)
+- Integrate Random Forest and Prophet models
+- Add ensemble prediction methods
+- Implement model backtesting and validation
+- Add more sophisticated feature engineering
+
+### Long Term (6+ months)
+- LSTM and deep learning model integration
+- Real-time model retraining based on performance
+- Advanced ensemble methods and model stacking
+- Multi-asset prediction capabilities
+- Advanced visualization and analytics dashboard
+
+### Infrastructure Improvements
+- Robust CI/CD pipeline with automated testing
+- Infrastructure as Code (IaC) for deployment
+- Enhanced monitoring and alerting systems
+- Authentication and authorization system
+- API rate limiting and usage analytics
+- Multi-region deployment for improved reliability
 
 ---
 
