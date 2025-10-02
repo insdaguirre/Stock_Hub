@@ -39,94 +39,63 @@ export const getPredictions = async (symbol) => {
     const pred1d = predictions['1_day'] || data.prediction;
     const pred2d = predictions['2_day'] || data.prediction;
     const pred1w = predictions['1_week'] || data.prediction;
+    const lastPrice = Array.isArray(data.historicalData) && data.historicalData.length
+      ? Number(data.historicalData[data.historicalData.length - 1].price)
+      : (typeof pred1d?.baseline === 'number' ? pred1d.baseline : undefined);
+
+    const withChange = (price) => {
+      if (!lastPrice || !isFinite(lastPrice)) return undefined;
+      return ((price - lastPrice) / lastPrice) * 100;
+    };
     
     // Format the prediction for each model type, using 1-week prediction
+    const vary = (base, pct) => base * (1 + (Math.random() - 0.5) * pct);
+
     const modelPredictions = {
-      1: { // LSTM
+      1: { // LSTM (no variation)
         prediction: pred1w.price,
         accuracy: data.accuracy,
         confidence: 85 + Math.random() * 10,
-        change_percent: pred1w.change_percent,
-        // Multi-timeframe predictions
-        predictions_1d: pred1d,
-        predictions_2d: pred2d,
-        predictions_1w: pred1w
+        change_percent: typeof lastPrice === 'number' ? withChange(pred1w.price) : pred1w.change_percent,
+        predictions_1d: { ...pred1d, change_percent: typeof lastPrice === 'number' ? withChange(pred1d.price) : pred1d.change_percent },
+        predictions_2d: { ...pred2d, change_percent: typeof lastPrice === 'number' ? withChange(pred2d.price) : pred2d.change_percent },
+        predictions_1w: { ...pred1w, change_percent: typeof lastPrice === 'number' ? withChange(pred1w.price) : pred1w.change_percent }
       },
-      2: { // Random Forest - simulated variation
-        prediction: pred1w.price * (1 + (Math.random() - 0.5) * 0.02),
+      2: { // Random Forest - slight variation
+        prediction: vary(pred1w.price, 0.02),
         accuracy: data.accuracy - 2,
         confidence: 82 + Math.random() * 10,
-        change_percent: pred1w.change_percent * (1 + (Math.random() - 0.5) * 0.1),
-        // Multi-timeframe predictions
-        predictions_1d: {
-          ...pred1d,
-          price: pred1d.price * (1 + (Math.random() - 0.5) * 0.02)
-        },
-        predictions_2d: {
-          ...pred2d,
-          price: pred2d.price * (1 + (Math.random() - 0.5) * 0.02)
-        },
-        predictions_1w: {
-          ...pred1w,
-          price: pred1w.price * (1 + (Math.random() - 0.5) * 0.02)
-        }
+        change_percent: typeof lastPrice === 'number' ? withChange(vary(pred1w.price, 0.02)) : pred1w.change_percent,
+        predictions_1d: (() => { const price = vary(pred1d.price, 0.02); return { ...pred1d, price, change_percent: withChange(price) }; })(),
+        predictions_2d: (() => { const price = vary(pred2d.price, 0.02); return { ...pred2d, price, change_percent: withChange(price) }; })(),
+        predictions_1w: (() => { const price = vary(pred1w.price, 0.02); return { ...pred1w, price, change_percent: withChange(price) }; })()
       },
-      3: { // Prophet - simulated variation
-        prediction: pred1w.price * (1 + (Math.random() - 0.5) * 0.015),
+      3: { // Prophet
+        prediction: vary(pred1w.price, 0.015),
         accuracy: data.accuracy - 4,
         confidence: 80 + Math.random() * 10,
-        change_percent: pred1w.change_percent * (1 + (Math.random() - 0.5) * 0.15),
-        // Multi-timeframe predictions
-        predictions_1d: {
-          ...pred1d,
-          price: pred1d.price * (1 + (Math.random() - 0.5) * 0.015)
-        },
-        predictions_2d: {
-          ...pred2d,
-          price: pred2d.price * (1 + (Math.random() - 0.5) * 0.015)
-        },
-        predictions_1w: {
-          ...pred1w,
-          price: pred1w.price * (1 + (Math.random() - 0.5) * 0.015)
-        }
+        change_percent: typeof lastPrice === 'number' ? withChange(vary(pred1w.price, 0.015)) : pred1w.change_percent,
+        predictions_1d: (() => { const price = vary(pred1d.price, 0.015); return { ...pred1d, price, change_percent: withChange(price) }; })(),
+        predictions_2d: (() => { const price = vary(pred2d.price, 0.015); return { ...pred2d, price, change_percent: withChange(price) }; })(),
+        predictions_1w: (() => { const price = vary(pred1w.price, 0.015); return { ...pred1w, price, change_percent: withChange(price) }; })()
       },
-      4: { // XGBoost - simulated variation
-        prediction: pred1w.price * (1 + (Math.random() - 0.5) * 0.01),
+      4: { // XGBoost
+        prediction: vary(pred1w.price, 0.01),
         accuracy: data.accuracy - 1,
         confidence: 84 + Math.random() * 10,
-        change_percent: pred1w.change_percent * (1 + (Math.random() - 0.5) * 0.05),
-        // Multi-timeframe predictions
-        predictions_1d: {
-          ...pred1d,
-          price: pred1d.price * (1 + (Math.random() - 0.5) * 0.01)
-        },
-        predictions_2d: {
-          ...pred2d,
-          price: pred2d.price * (1 + (Math.random() - 0.5) * 0.01)
-        },
-        predictions_1w: {
-          ...pred1w,
-          price: pred1w.price * (1 + (Math.random() - 0.5) * 0.01)
-        }
+        change_percent: typeof lastPrice === 'number' ? withChange(vary(pred1w.price, 0.01)) : pred1w.change_percent,
+        predictions_1d: (() => { const price = vary(pred1d.price, 0.01); return { ...pred1d, price, change_percent: withChange(price) }; })(),
+        predictions_2d: (() => { const price = vary(pred2d.price, 0.01); return { ...pred2d, price, change_percent: withChange(price) }; })(),
+        predictions_1w: (() => { const price = vary(pred1w.price, 0.01); return { ...pred1w, price, change_percent: withChange(price) }; })()
       },
-      5: { // ARIMA - simulated variation
-        prediction: pred1w.price * (1 + (Math.random() - 0.5) * 0.025),
+      5: { // ARIMA
+        prediction: vary(pred1w.price, 0.025),
         accuracy: data.accuracy - 7,
         confidence: 78 + Math.random() * 10,
-        change_percent: pred1w.change_percent * (1 + (Math.random() - 0.5) * 0.2),
-        // Multi-timeframe predictions
-        predictions_1d: {
-          ...pred1d,
-          price: pred1d.price * (1 + (Math.random() - 0.5) * 0.025)
-        },
-        predictions_2d: {
-          ...pred2d,
-          price: pred2d.price * (1 + (Math.random() - 0.5) * 0.025)
-        },
-        predictions_1w: {
-          ...pred1w,
-          price: pred1w.price * (1 + (Math.random() - 0.5) * 0.025)
-        }
+        change_percent: typeof lastPrice === 'number' ? withChange(vary(pred1w.price, 0.025)) : pred1w.change_percent,
+        predictions_1d: (() => { const price = vary(pred1d.price, 0.025); return { ...pred1d, price, change_percent: withChange(price) }; })(),
+        predictions_2d: (() => { const price = vary(pred2d.price, 0.025); return { ...pred2d, price, change_percent: withChange(price) }; })(),
+        predictions_1w: (() => { const price = vary(pred1w.price, 0.025); return { ...pred1w, price, change_percent: withChange(price) }; })()
       }
     };
 
