@@ -27,7 +27,7 @@ const StockInfo = styled.div``;
 const StockSymbol = styled.h1`
   font-size: 32px;
   margin: 0;
-  color: #1c1c1e;
+  color: #FFFFFF;
 `;
 
 const StockPrice = styled.div`
@@ -285,15 +285,15 @@ const StockPage = () => { //Defines StockPage as a functional react component
             <YAxis tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} domain={["auto","auto"]} />
             <Tooltip contentStyle={{ background: '#111113', border: '1px solid #1F1F20', color: '#fff' }} labelStyle={{ color: '#C7C7CC' }} />
             <Legend wrapperStyle={{ color: '#C7C7CC' }} />
-            <Line type="monotone" dataKey="price" stroke="#C7C7CC" name="Historical Price" strokeWidth={2} dot={{ r: 1.5, stroke: '#C7C7CC' }} />
-            <Line type="monotone" dataKey="prediction" stroke="#34C759" name="Prediction" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 2, stroke: '#34C759' }} />
+            <Line type="monotone" dataKey="price" stroke="#C7C7CC" name="Historical Price" strokeWidth={2} dot={{ r: 1.8, stroke: '#C7C7CC' }} />
+            <Line type="monotone" dataKey="prediction" stroke="#34C759" name="Prediction" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 4, stroke: '#34C759', strokeWidth: 2 }} activeDot={{ r: 5, stroke: '#34C759', strokeWidth: 2 }} />
           </LineChart>
         </ResponsiveContainer>
       </ChartContainer>
 
       <ModelInfo>
-        <ModelTitle>{currentModel.name}</ModelTitle>
-        <p>{currentModel.description}</p>
+        <ModelTitle>{currentModel?.name || 'Model'}</ModelTitle>
+        <p>{currentModel?.description || ''}</p>
         <MetricsGrid>
           {(() => {
             const model = predictions.models[modelId] || {};
@@ -320,7 +320,7 @@ const StockPage = () => { //Defines StockPage as a functional react component
           </Metric>
           <Metric>
             <MetricLabel>Confidence Score</MetricLabel>
-            <MetricValue>{predictions.models[modelId]?.confidence ?? 0}%</MetricValue>
+            <MetricValue>{Number(predictions.models[modelId]?.confidence ?? 0).toFixed(2)}%</MetricValue>
           </Metric>
         </MetricsGrid>
       </ModelInfo>
