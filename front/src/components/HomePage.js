@@ -579,10 +579,18 @@ useEffect(() => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
 
-  const saveToStorage = (sym, r, points) => {
+  const saveToStorage = (sym, r, points, marketState = null) => {
     try {
-      // TTL per range: short for 1D, longer for long ranges
-      const ttlMs = r === '1D' ? 5*60*1000 : (['1W','1M','3M'].includes(r) ? 30*60*1000 : 12*60*60*1000);
+      // Dynamic TTL for 1D based on market state
+      let ttlMs;
+      if (r === '1D') {
+        // If market is open, cache for only 1 minute to ensure fresh data
+        // If market is closed, cache for 12 hours (until next trading day)
+        ttlMs = (marketState === 'open') ? 1*60*1000 : 12*60*60*1000;
+      } else {
+        // Longer ranges can have longer cache
+        ttlMs = (['1W','1M','3M'].includes(r) ? 30*60*1000 : 12*60*60*1000);
+      }
       const payload = { points, exp: Date.now() + ttlMs };
       localStorage.setItem(`sh:ts:${sym}:${r}`, JSON.stringify(payload));
     } catch (_) {}
@@ -797,8 +805,8 @@ useEffect(() => {
       } catch (_) {}
 
       seriesCacheRef.current['1D'] = pts || [];
-      // Persist short-lived 1D cache to enable instant hydration on back nav
-      try { saveToStorage(selectedSymbol, '1D', pts || []); } catch (_) {}
+      // Persist 1D cache with dynamic TTL based on market state
+      try { saveToStorage(selectedSymbol, '1D', pts || [], intrResp?.market); } catch (_) {}
       setSeries({ points: pts || [] });
       // background prefetch
       ['1W','1M','3M'].forEach(async (r) => {
@@ -942,15 +950,29 @@ useEffect(() => {
             {['1D','1W','1M','3M','6M','YTD','1Y','2Y','5Y','10Y'].map(r => (
               <RangeTab key={r} active={range === r} onClick={async () => {
                 setRange(r);
-                // For 1D, bypass storage caches; always fetch fresh intraday
-                if (r !== '1D') {
-                  // serve from in-memory cache first
+                // For 1D when market is open, always fetch fresh data
+                if (r === '1D' && intraday && intraday.market === 'open') {
+                  // Market is open - always fetch fresh data, bypass all caches
+                } else if (r !== '1D') {
+                  // For non-1D ranges, use cache
                   let cached = seriesCacheRef.current[r];
                   if (!cached || !cached.length) {
-                    // try localStorage
                     cached = loadFromStorage(selectedSymbol, r);
                     if (cached && cached.length) {
                       seriesCacheRef.current[r] = cached;
+                    }
+                  }
+                  if (cached && cached.length) {
+                    setSeries({ points: cached });
+                    return;
+                  }
+                } else {
+                  // For 1D when market is closed, we can use cache
+                  let cached = seriesCacheRef.current['1D'];
+                  if (!cached || !cached.length) {
+                    cached = loadFromStorage(selectedSymbol, '1D');
+                    if (cached && cached.length) {
+                      seriesCacheRef.current['1D'] = cached;
                     }
                   }
                   if (cached && cached.length) {
@@ -986,7 +1008,7 @@ useEffect(() => {
                     } catch (_) {}
                   }
                   seriesCacheRef.current[r] = pts;
-                  saveToStorage(selectedSymbol, r, pts);
+                  saveToStorage(selectedSymbol, r, pts, intraday?.market);
                   setSeries({ points: pts });
                 } catch (_) {}
               }}>{r}</RangeTab>
@@ -1036,22 +1058,36 @@ useEffect(() => {
                         const firstTs = displayPoints[0]?.xTs;
                         const lastPointTs = displayPoints[displayPoints.length - 1]?.xTs;
                         const asOfTs = intraday && intraday.asOf ? new Date(intraday.asOf).getTime() : lastPointTs;
-                        // For 1D, we keep the axis spanning full session (09:30–16:00 ET), but only plot data up to asOf
+                        // For 1D, ALWAYS keep the axis spanning full session (09:30–16:00 ET)
                         let domainMin = firstTs || 'dataMin';
                         let domainMax = lastPointTs || Date.now();
-                        if (range === '1D' && typeof asOfTs === 'number') {
+                        if (range === '1D') {
                           try {
-                            const asOfIso = intraday.asOf;
-                            const dateMatch = typeof asOfIso === 'string' ? asOfIso.match(/^(\d{4}-\d{2}-\d{2})T/) : null;
-                            const off = typeof asOfIso === 'string' ? asOfIso.slice(-6) : null; // e.g. -04:00
-                            if (dateMatch && off) {
-                              const day = dateMatch[1];
-                              const openIso = `${day}T09:30:00${off}`;
-                              const closeIso = `${day}T16:00:00${off}`;
-                              const openTs = new Date(openIso).getTime();
-                              const closeTs = new Date(closeIso).getTime();
-                              domainMin = openTs;
-                              domainMax = closeTs;
+                            // Determine the trading day to display
+                            let targetDate;
+                            if (intraday && intraday.asOf) {
+                              // Use the date from the API response
+                              const asOfIso = intraday.asOf;
+                              const dateMatch = typeof asOfIso === 'string' ? asOfIso.match(/^(\d{4}-\d{2}-\d{2})T/) : null;
+                              if (dateMatch) {
+                                targetDate = dateMatch[1];
+                              }
+                            }
+                            
+                            // If we couldn't get date from asOf, use the last data point's date
+                            if (!targetDate && displayPoints && displayPoints.length > 0) {
+                              const lastPointDate = new Date(displayPoints[displayPoints.length - 1].xTs);
+                              targetDate = `${lastPointDate.getFullYear()}-${String(lastPointDate.getMonth() + 1).padStart(2, '0')}-${String(lastPointDate.getDate()).padStart(2, '0')}`;
+                            }
+                            
+                            if (targetDate) {
+                              // Get timezone offset from asOf or use Eastern Time
+                              const asOfIso = intraday?.asOf || '';
+                              const off = typeof asOfIso === 'string' ? asOfIso.slice(-6) : '-05:00'; // Default to ET
+                              const openIso = `${targetDate}T09:30:00${off}`;
+                              const closeIso = `${targetDate}T16:00:00${off}`;
+                              domainMin = new Date(openIso).getTime();
+                              domainMax = new Date(closeIso).getTime();
                             }
                           } catch (_) {}
                         }
