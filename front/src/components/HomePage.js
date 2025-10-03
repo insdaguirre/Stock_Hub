@@ -752,11 +752,23 @@ useEffect(() => {
         } catch (_) { pts = []; }
       }
 
-      // Clamp intraday to the API asOf when market is open
+      // Clamp intraday to session open..asOf to avoid future leakage, but keep full-day x-axis later
       try {
-        if (intrResp && intrResp.market === 'open' && intrResp.asOf) {
-          const asOfTs = new Date(intrResp.asOf).getTime();
-          pts = (pts || []).filter(p => typeof p.xTs === 'number' && p.xTs <= asOfTs);
+        if (intrResp && intrResp.asOf) {
+          const asOfIso = intrResp.asOf;
+          const asOfTs = new Date(asOfIso).getTime();
+          const dateMatch = typeof asOfIso === 'string' ? asOfIso.match(/^(\d{4}-\d{2}-\d{2})T/) : null;
+          const off = typeof asOfIso === 'string' ? asOfIso.slice(-6) : null; // timezone offset like -04:00
+          let openTs = null;
+          if (dateMatch && off) {
+            const day = dateMatch[1];
+            const openIso = `${day}T09:30:00${off}`;
+            openTs = new Date(openIso).getTime();
+          }
+          let filtered = (pts || []).filter(p => typeof p.xTs === 'number' && (openTs ? p.xTs >= openTs : true) && p.xTs <= asOfTs);
+          if (filtered.length >= 2) {
+            pts = filtered;
+          }
         }
       } catch (_) {}
 
@@ -980,14 +992,27 @@ useEffect(() => {
                         const firstTs = displayPoints[0]?.xTs;
                         const lastPointTs = displayPoints[displayPoints.length - 1]?.xTs;
                         const asOfTs = intraday && intraday.asOf ? new Date(intraday.asOf).getTime() : lastPointTs;
-                        const maxTs = (range === '1D')
-                          ? Math.min(
-                              typeof asOfTs === 'number' ? asOfTs : (lastPointTs || Date.now()),
-                              typeof lastPointTs === 'number' ? lastPointTs : (asOfTs || Date.now())
-                            )
-                          : (lastPointTs || Date.now());
+                        // For 1D, we keep the axis spanning full session (09:30–16:00 ET), but only plot data up to asOf
+                        let domainMin = firstTs || 'dataMin';
+                        let domainMax = lastPointTs || Date.now();
+                        if (range === '1D' && typeof asOfTs === 'number') {
+                          try {
+                            const asOfIso = intraday.asOf;
+                            const dateMatch = typeof asOfIso === 'string' ? asOfIso.match(/^(\d{4}-\d{2}-\d{2})T/) : null;
+                            const off = typeof asOfIso === 'string' ? asOfIso.slice(-6) : null; // e.g. -04:00
+                            if (dateMatch && off) {
+                              const day = dateMatch[1];
+                              const openIso = `${day}T09:30:00${off}`;
+                              const closeIso = `${day}T16:00:00${off}`;
+                              const openTs = new Date(openIso).getTime();
+                              const closeTs = new Date(closeIso).getTime();
+                              domainMin = openTs;
+                              domainMax = closeTs;
+                            }
+                          } catch (_) {}
+                        }
                         return (
-                          <XAxis dataKey="xTs" type="number" scale="time" allowDataOverflow={false} domain={[firstTs || 'dataMin', maxTs]} tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={30}
+                          <XAxis dataKey="xTs" type="number" scale="time" allowDataOverflow={false} domain={[domainMin, domainMax]} tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={30}
                           tickFormatter={(ts) => {
                             const d = new Date(ts);
                             if (range === '1D') {
