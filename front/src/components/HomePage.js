@@ -1045,7 +1045,7 @@ useEffect(() => {
                           } catch (_) {}
                         }
                         return (
-                          <XAxis dataKey="xTs" type="number" scale="time" allowDataOverflow={false} domain={[domainMin, domainMax]} tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={30}
+                          <XAxis dataKey="xTs" type="number" scale="time" allowDataOverflow={false} domain={[domainMin, domainMax]} tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={30} padding={{ left: 0, right: 0 }} interval="preserveStartEnd"
                           tickFormatter={(ts) => {
                             const d = new Date(ts);
                             if (range === '1D') {
