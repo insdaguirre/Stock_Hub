@@ -959,53 +959,65 @@ useEffect(() => {
           <div style={{ height: 220 }}>
             {series && series.points && series.points.length >= 2 ? (
               <ResponsiveContainer width="100%" height="100%" key={range}>
-                <AreaChart data={series.points} margin={{ top: 8, right: 16, left: 0, bottom: 0 }} key={range}>
-                  <defs>
-                    <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#34C759" stopOpacity={0.4} />
-                      <stop offset="100%" stopColor="#34C759" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1f1f20" />
-                  {(() => {
-                    const firstTs = series.points[0]?.xTs;
-                    const lastPointTs = series.points[series.points.length - 1]?.xTs;
-                    const asOfTs = intraday && intraday.asOf ? new Date(intraday.asOf).getTime() : lastPointTs;
-                    // Ensure the x-axis never extends beyond "as of" (current time) when market is open
-                    const computedMax = Math.min(
-                      typeof asOfTs === 'number' ? asOfTs : Date.now(),
-                      typeof lastPointTs === 'number' ? lastPointTs : Date.now()
-                    );
-                    return (
-                      <XAxis dataKey="xTs" type="number" domain={[firstTs || 'dataMin', computedMax]} tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={30}
-                    tickFormatter={(ts) => {
-                      const d = new Date(ts);
-                      if (range === '1D') {
-                        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                      }
-                      if (['YTD','1Y','2Y','5Y','10Y'].includes(range)) {
-                        return d.toLocaleDateString([], { month: '2-digit', day: '2-digit', year: '2-digit' });
-                      }
-                      return d.toLocaleDateString([], { month: '2-digit', day: '2-digit' });
-                    }}
-                  />
-                    );
-                  })()}
-                  <YAxis dataKey="price" tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} domain={['auto','auto']} />
-                  <Tooltip contentStyle={{ background: '#111113', border: '1px solid #1F1F20', color: '#fff' }} labelStyle={{ color: '#C7C7CC' }}
-                    labelFormatter={(ts) => {
-                      const d = new Date(ts);
-                      if (range === '1D') {
-                        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                      }
-                      if (['YTD','1Y','2Y','5Y','10Y'].includes(range)) {
-                        return d.toLocaleDateString([], { month: '2-digit', day: '2-digit', year: '2-digit' });
-                      }
-                      return d.toLocaleDateString([], { month: '2-digit', day: '2-digit' });
-                    }}
-                  />
-                  <Area type="monotone" dataKey="price" stroke="#34C759" fill="url(#grad)" strokeWidth={2} />
-                </AreaChart>
+                {(() => {
+                  // Filter to as-of at render-time to prevent any drift
+                  const lastPointTsAll = series.points[series.points.length - 1]?.xTs;
+                  const asOfTsAll = intraday && intraday.asOf ? new Date(intraday.asOf).getTime() : undefined;
+                  const maxAllowedTs = (range === '1D') ? (typeof asOfTsAll === 'number' ? Math.min(asOfTsAll, lastPointTsAll || asOfTsAll) : (lastPointTsAll || Date.now())) : (lastPointTsAll || Date.now());
+                  const displayPoints = (range === '1D')
+                    ? (series.points || []).filter(p => typeof p.xTs === 'number' && p.xTs <= maxAllowedTs)
+                    : series.points;
+                  return (
+                    <AreaChart data={displayPoints} margin={{ top: 8, right: 16, left: 0, bottom: 0 }} key={`${range}-chart`}>
+                      <defs>
+                        <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#34C759" stopOpacity={0.4} />
+                          <stop offset="100%" stopColor="#34C759" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1f1f20" />
+                      {(() => {
+                        const firstTs = displayPoints[0]?.xTs;
+                        const lastPointTs = displayPoints[displayPoints.length - 1]?.xTs;
+                        const asOfTs = intraday && intraday.asOf ? new Date(intraday.asOf).getTime() : lastPointTs;
+                        const maxTs = (range === '1D')
+                          ? Math.min(
+                              typeof asOfTs === 'number' ? asOfTs : (lastPointTs || Date.now()),
+                              typeof lastPointTs === 'number' ? lastPointTs : (asOfTs || Date.now())
+                            )
+                          : (lastPointTs || Date.now());
+                        return (
+                          <XAxis dataKey="xTs" type="number" scale="time" allowDataOverflow={false} domain={[firstTs || 'dataMin', maxTs]} tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={30}
+                          tickFormatter={(ts) => {
+                            const d = new Date(ts);
+                            if (range === '1D') {
+                              return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            }
+                            if (['YTD','1Y','2Y','5Y','10Y'].includes(range)) {
+                              return d.toLocaleDateString([], { month: '2-digit', day: '2-digit', year: '2-digit' });
+                            }
+                            return d.toLocaleDateString([], { month: '2-digit', day: '2-digit' });
+                          }}
+                        />
+                        );
+                      })()}
+                      <YAxis dataKey="price" tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} domain={['auto','auto']} />
+                      <Tooltip contentStyle={{ background: '#111113', border: '1px solid #1F1F20', color: '#fff' }} labelStyle={{ color: '#C7C7CC' }}
+                        labelFormatter={(ts) => {
+                          const d = new Date(ts);
+                          if (range === '1D') {
+                            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                          }
+                          if (['YTD','1Y','2Y','5Y','10Y'].includes(range)) {
+                            return d.toLocaleDateString([], { month: '2-digit', day: '2-digit', year: '2-digit' });
+                          }
+                          return d.toLocaleDateString([], { month: '2-digit', day: '2-digit' });
+                        }}
+                      />
+                      <Area type="monotone" dataKey="price" stroke="#34C759" fill="url(#grad)" strokeWidth={2} />
+                    </AreaChart>
+                  );
+                })()}
               </ResponsiveContainer>
             ) : (
               <div style={{ color: '#8e8e93', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
