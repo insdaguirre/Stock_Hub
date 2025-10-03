@@ -761,13 +761,10 @@ useEffect(() => {
           const dateMatch = typeof asOfIso === 'string' ? asOfIso.match(/^(\d{4}-\d{2}-\d{2})T/) : null;
           const off = typeof asOfIso === 'string' ? asOfIso.slice(-6) : null; // timezone offset like -04:00
           let openTs = null;
-          let closeTs = null;
           if (dateMatch && off) {
             const day = dateMatch[1];
             const openIso = `${day}T09:30:00${off}`;
-            const closeIso = `${day}T16:00:00${off}`;
             openTs = new Date(openIso).getTime();
-            closeTs = new Date(closeIso).getTime();
           }
           // When market is open, discard any series whose last point is before today's session
           if (intrResp.market === 'open' && openTs && pts && pts.length) {
