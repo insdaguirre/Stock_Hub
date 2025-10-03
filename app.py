@@ -407,7 +407,10 @@ def fetch_intraday(symbol: str, interval: str = '1min'):
             return out
 
         points = sorted(fetch_candles(session_date), key=lambda x: x['time'])
-        if len(points) < 2:
+        # Only fall back to prior trading day if the market is currently CLOSED.
+        # If market is OPEN and we got no Finnhub data (e.g., provider delay), continue to Alpha Vantage below.
+        market_is_open = (now_et.weekday() < 5 and open_time <= now_et <= close_time)
+        if len(points) < 2 and not market_is_open:
             # try last trading day by stepping back one day at a time up to 5 days
             for delta in range(1, 6):
                 prev_day = session_date - timedelta(days=delta)
@@ -417,14 +420,14 @@ def fetch_intraday(symbol: str, interval: str = '1min'):
                     break
         # If still empty, fall back to Alpha Vantage below
         if len(points) >= 2:
-            state = 'open' if (now_et.weekday() < 5 and open_time <= now_et <= close_time) else 'closed'
+            state = 'open' if market_is_open else 'closed'
             result = {"points": points, "market": state, "asOf": now_et.isoformat()}
             _cache_set(cache_key, json.dumps(result), ttl_seconds=60)
             try:
                 last_dt = points[-1].get('date') or points[-1].get('time')
             except Exception:
                 last_dt = None
-            print(json.dumps({"route": "fh_intraday", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000), "count": len(points), "last_point": last_dt}))
+            print(json.dumps({"route": "fh_intraday", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000), "count": len(points), "last_point": last_dt, "market_open": market_is_open}))
             return result
 
     throttled = _throttle(f"intraday:{symbol}")
