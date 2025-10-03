@@ -774,29 +774,8 @@ useEffect(() => {
             const openIso = `${day}T09:30:00${off}`;
             openTs = new Date(openIso).getTime();
           }
-          // When market is open, discard any series whose last point is before today's session
-          if (intrResp.market === 'open' && openTs && pts && pts.length) {
-            const lastPt = pts[pts.length - 1];
-            if (typeof lastPt.xTs === 'number' && lastPt.xTs < openTs) {
-              // Stale data: clear it and refetch from timeseries endpoint
-              pts = [];
-              try {
-                const ts = await getTimeSeries(selectedSymbol, '1D');
-                if (mounted) {
-                  pts = (ts.points || []).map(p => {
-                    if (p.date) {
-                      const dt = new Date(p.date);
-                      return { xTs: dt.getTime(), price: p.price };
-                    }
-                    const hhmm = (p.time ?? '').split(':');
-                    const d = new Date();
-                    if (hhmm.length >= 2) { d.setHours(parseInt(hhmm[0],10), parseInt(hhmm[1],10), 0, 0); }
-                    return { xTs: d.getTime(), price: p.price };
-                  });
-                }
-              } catch (_) { pts = []; }
-            }
-          }
+          // When market is open, if last point predates session open, prefer not to blank data.
+          // We will keep current points and let the next refresh fetch fresh data.
           let filtered = (pts || []).filter(p => typeof p.xTs === 'number' && (openTs ? p.xTs >= openTs : true) && p.xTs <= asOfTs);
           if (filtered.length >= 2) {
             pts = filtered;
@@ -981,18 +960,12 @@ useEffect(() => {
                   }
                 }
                 try {
-                  const ts = await getTimeSeries(selectedSymbol, r);
+                  const ts = (r === '1D') ? await getIntraday(selectedSymbol).then(res => ({ points: res.points || [] })) : await getTimeSeries(selectedSymbol, r);
                   // Normalize to numeric timestamp for robust axis scaling
                   let pts = (ts.points || []).map(p => {
                     if (r === '1D') {
-                      if (p.date) {
-                        const dt = new Date(p.date);
-                        return { xTs: dt.getTime(), price: p.price };
-                      }
-                      const hhmm = (p.time ?? '').split(':');
-                      const d = new Date();
-                      if (hhmm.length >= 2) { d.setHours(parseInt(hhmm[0],10), parseInt(hhmm[1],10), 0, 0); }
-                      return { xTs: d.getTime(), price: p.price };
+                      const dtStr = p.date ? p.date : (p.time ? p.time : new Date().toISOString());
+                      return { xTs: new Date(dtStr).getTime(), price: p.price };
                     }
                     // p.date may be string 'YYYY-MM-DD' or an ISO string; normalize
                     const dt = p.date ? new Date(p.date) : (p.time ? new Date(p.time) : new Date());
@@ -1001,7 +974,7 @@ useEffect(() => {
                   // Clamp intraday to API asOf
                   if (r === '1D') {
                     try {
-                      if (intraday && intraday.market === 'open' && intraday.asOf) {
+                      if (intraday && intraday.asOf) {
                         const asOfTs = new Date(intraday.asOf).getTime();
                         pts = pts.filter(p => typeof p.xTs === 'number' && p.xTs <= asOfTs);
                       }
@@ -1025,26 +998,7 @@ useEffect(() => {
                   let displayPoints = (range === '1D')
                     ? (series.points || []).filter(p => typeof p.xTs === 'number' && p.xTs <= maxAllowedTs)
                     : series.points;
-                  // Additional check for 1D: when market is open, ensure series is from today's session
-                  if (range === '1D' && intraday && intraday.market === 'open' && intraday.asOf) {
-                    try {
-                      const asOfIso = intraday.asOf;
-                      const dateMatch = typeof asOfIso === 'string' ? asOfIso.match(/^(\d{4}-\d{2}-\d{2})T/) : null;
-                      const off = typeof asOfIso === 'string' ? asOfIso.slice(-6) : null;
-                      if (dateMatch && off) {
-                        const day = dateMatch[1];
-                        const openIso = `${day}T09:30:00${off}`;
-                        const openTs = new Date(openIso).getTime();
-                        if (displayPoints && displayPoints.length) {
-                          const lastPt = displayPoints[displayPoints.length - 1];
-                          if (typeof lastPt.xTs === 'number' && lastPt.xTs < openTs) {
-                            // Stale cached data; clear display
-                            displayPoints = [];
-                          }
-                        }
-                      }
-                    } catch (_) {}
-                  }
+                  // Do not clear display at render-time; rely on fetch cadence to correct stale caches
                   return (
                     <AreaChart data={displayPoints} margin={{ top: 8, right: 16, left: 0, bottom: 0 }} key={`${range}-chart`}>
                       <defs>
