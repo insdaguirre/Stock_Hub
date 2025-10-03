@@ -1057,7 +1057,6 @@ useEffect(() => {
                       {(() => {
                         const firstTs = displayPoints[0]?.xTs;
                         const lastPointTs = displayPoints[displayPoints.length - 1]?.xTs;
-                        const asOfTs = intraday && intraday.asOf ? new Date(intraday.asOf).getTime() : lastPointTs;
                         // For 1D, ALWAYS keep the axis spanning full session (09:30–16:00 ET)
                         let domainMin = firstTs || 'dataMin';
                         let domainMax = lastPointTs || Date.now();
