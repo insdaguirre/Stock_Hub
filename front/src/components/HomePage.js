@@ -971,9 +971,13 @@ useEffect(() => {
                     const firstTs = series.points[0]?.xTs;
                     const lastPointTs = series.points[series.points.length - 1]?.xTs;
                     const asOfTs = intraday && intraday.asOf ? new Date(intraday.asOf).getTime() : lastPointTs;
-                    const maxTs = Math.min(asOfTs || lastPointTs || Date.now(), lastPointTs || asOfTs || Date.now());
+                    // Ensure the x-axis never extends beyond "as of" (current time) when market is open
+                    const computedMax = Math.min(
+                      typeof asOfTs === 'number' ? asOfTs : Date.now(),
+                      typeof lastPointTs === 'number' ? lastPointTs : Date.now()
+                    );
                     return (
-                      <XAxis dataKey="xTs" type="number" domain={[firstTs || 'dataMin', maxTs]} tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={30}
+                      <XAxis dataKey="xTs" type="number" domain={[firstTs || 'dataMin', computedMax]} tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={30}
                     tickFormatter={(ts) => {
                       const d = new Date(ts);
                       if (range === '1D') {

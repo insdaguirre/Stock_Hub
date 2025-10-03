@@ -442,7 +442,13 @@ def fetch_intraday(symbol: str, interval: str = '1min'):
     def extract_for_day(day_date):
         out = []
         start = datetime.combine(day_date, datetime.min.time(), et).replace(hour=9, minute=30)
+        # IMPORTANT: Clamp today's series to "now" so the chart doesn't extend to 16:00 when market is open
         end = datetime.combine(day_date, datetime.min.time(), et).replace(hour=16, minute=0)
+        if day_date == session_date:
+            try:
+                end = min(end, now_et)
+            except Exception:
+                pass
         for ts_str, values in series.items():
             try:
                 ts = datetime.strptime(ts_str, '%Y-%m-%d %H:%M:%S').replace(tzinfo=et)
