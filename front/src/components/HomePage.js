@@ -1039,8 +1039,12 @@ useEffect(() => {
                               const off = typeof asOfIso === 'string' ? asOfIso.slice(-6) : '-05:00'; // Default to ET
                               const openIso = `${targetDate}T09:30:00${off}`;
                               const closeIso = `${targetDate}T16:00:00${off}`;
-                              domainMin = new Date(openIso).getTime();
-                              domainMax = new Date(closeIso).getTime();
+                              const openTs = new Date(openIso).getTime();
+                              const closeTs = new Date(closeIso).getTime();
+                              const asOfTs = intraday && intraday.asOf ? new Date(intraday.asOf).getTime() : null;
+                              domainMin = openTs;
+                              // If market is open, stretch to current time so the data occupies the full width; otherwise to close
+                              domainMax = (intraday && intraday.market === 'open' && typeof asOfTs === 'number') ? asOfTs : closeTs;
                             }
                           } catch (_) {}
                         }
