@@ -753,6 +753,7 @@ useEffect(() => {
       }
 
       // Clamp intraday to session open..asOf to avoid future leakage, but keep full-day x-axis later
+      // CRITICAL: when market is open, verify series is from TODAY (not stale cache from yesterday)
       try {
         if (intrResp && intrResp.asOf) {
           const asOfIso = intrResp.asOf;
@@ -760,10 +761,36 @@ useEffect(() => {
           const dateMatch = typeof asOfIso === 'string' ? asOfIso.match(/^(\d{4}-\d{2}-\d{2})T/) : null;
           const off = typeof asOfIso === 'string' ? asOfIso.slice(-6) : null; // timezone offset like -04:00
           let openTs = null;
+          let closeTs = null;
           if (dateMatch && off) {
             const day = dateMatch[1];
             const openIso = `${day}T09:30:00${off}`;
+            const closeIso = `${day}T16:00:00${off}`;
             openTs = new Date(openIso).getTime();
+            closeTs = new Date(closeIso).getTime();
+          }
+          // When market is open, discard any series whose last point is before today's session
+          if (intrResp.market === 'open' && openTs && pts && pts.length) {
+            const lastPt = pts[pts.length - 1];
+            if (typeof lastPt.xTs === 'number' && lastPt.xTs < openTs) {
+              // Stale data: clear it and refetch from timeseries endpoint
+              pts = [];
+              try {
+                const ts = await getTimeSeries(selectedSymbol, '1D');
+                if (mounted) {
+                  pts = (ts.points || []).map(p => {
+                    if (p.date) {
+                      const dt = new Date(p.date);
+                      return { xTs: dt.getTime(), price: p.price };
+                    }
+                    const hhmm = (p.time ?? '').split(':');
+                    const d = new Date();
+                    if (hhmm.length >= 2) { d.setHours(parseInt(hhmm[0],10), parseInt(hhmm[1],10), 0, 0); }
+                    return { xTs: d.getTime(), price: p.price };
+                  });
+                }
+              } catch (_) { pts = []; }
+            }
           }
           let filtered = (pts || []).filter(p => typeof p.xTs === 'number' && (openTs ? p.xTs >= openTs : true) && p.xTs <= asOfTs);
           if (filtered.length >= 2) {
@@ -976,9 +1003,29 @@ useEffect(() => {
                   const lastPointTsAll = series.points[series.points.length - 1]?.xTs;
                   const asOfTsAll = intraday && intraday.asOf ? new Date(intraday.asOf).getTime() : undefined;
                   const maxAllowedTs = (range === '1D') ? (typeof asOfTsAll === 'number' ? Math.min(asOfTsAll, lastPointTsAll || asOfTsAll) : (lastPointTsAll || Date.now())) : (lastPointTsAll || Date.now());
-                  const displayPoints = (range === '1D')
+                  let displayPoints = (range === '1D')
                     ? (series.points || []).filter(p => typeof p.xTs === 'number' && p.xTs <= maxAllowedTs)
                     : series.points;
+                  // Additional check for 1D: when market is open, ensure series is from today's session
+                  if (range === '1D' && intraday && intraday.market === 'open' && intraday.asOf) {
+                    try {
+                      const asOfIso = intraday.asOf;
+                      const dateMatch = typeof asOfIso === 'string' ? asOfIso.match(/^(\d{4}-\d{2}-\d{2})T/) : null;
+                      const off = typeof asOfIso === 'string' ? asOfIso.slice(-6) : null;
+                      if (dateMatch && off) {
+                        const day = dateMatch[1];
+                        const openIso = `${day}T09:30:00${off}`;
+                        const openTs = new Date(openIso).getTime();
+                        if (displayPoints && displayPoints.length) {
+                          const lastPt = displayPoints[displayPoints.length - 1];
+                          if (typeof lastPt.xTs === 'number' && lastPt.xTs < openTs) {
+                            // Stale cached data; clear display
+                            displayPoints = [];
+                          }
+                        }
+                      }
+                    } catch (_) {}
+                  }
                   return (
                     <AreaChart data={displayPoints} margin={{ top: 8, right: 16, left: 0, bottom: 0 }} key={`${range}-chart`}>
                       <defs>
