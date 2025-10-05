@@ -999,16 +999,35 @@ useEffect(() => {
                     ? (series.points || []).filter(p => typeof p.xTs === 'number' && p.xTs <= maxAllowedTs)
                     : series.points;
                   // Do not clear display at render-time; rely on fetch cadence to correct stale caches
-                  return (
-                    <AreaChart data={(function(){
-                      // For 1D, extend the last known price horizontally to the axis max
-                      if (range === '1D' && Array.isArray(displayPoints) && displayPoints.length) {
-                        const last = displayPoints[displayPoints.length - 1];
-                        // domainMax will be computed below; approximate with last.xTs to start
-                        // We will rebuild the array after domainMax is computed in the XAxis block
+                  // Build extended points to fill width to axis max
+                  let extendedPoints = displayPoints;
+                  if (range === '1D' && Array.isArray(displayPoints) && displayPoints.length) {
+                    try {
+                      let targetDate;
+                      if (intraday && intraday.asOf) {
+                        const asOfIso = intraday.asOf;
+                        const match = typeof asOfIso === 'string' ? asOfIso.match(/^(\d{4}-\d{2}-\d{2})T/) : null;
+                        if (match) targetDate = match[1];
                       }
-                      return displayPoints;
-                    })()} margin={{ top: 8, right: 16, left: 0, bottom: 0 }} key={`${range}-chart`}>
+                      if (!targetDate) {
+                        const ld = new Date(displayPoints[displayPoints.length - 1].xTs);
+                        targetDate = `${ld.getFullYear()}-${String(ld.getMonth()+1).padStart(2,'0')}-${String(ld.getDate()).padStart(2,'0')}`;
+                      }
+                      if (targetDate) {
+                        const asOfIso = intraday?.asOf || '';
+                        const off = typeof asOfIso === 'string' ? asOfIso.slice(-6) : '-05:00';
+                        const closeTs = new Date(`${targetDate}T16:00:00${off}`).getTime();
+                        const asOfTs = intraday && intraday.asOf ? new Date(intraday.asOf).getTime() : null;
+                        const maxTs = (intraday && intraday.market === 'open' && typeof asOfTs === 'number') ? asOfTs : closeTs;
+                        const lastPt = displayPoints[displayPoints.length - 1];
+                        if (typeof lastPt?.xTs === 'number' && lastPt.xTs < maxTs) {
+                          extendedPoints = [...displayPoints, { xTs: maxTs, price: lastPt.price }];
+                        }
+                      }
+                    } catch (_) {}
+                  }
+                  return (
+                    <AreaChart data={extendedPoints} margin={{ top: 8, right: 16, left: 0, bottom: 0 }} key={`${range}-chart`}>
                       <defs>
                         <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="#34C759" stopOpacity={0.4} />
@@ -1056,14 +1075,6 @@ useEffect(() => {
                             }
                           } catch (_) {}
                         }
-                        // Optionally extend series to fill to domainMax
-                        let chartData = displayPoints;
-                        if (range === '1D' && Array.isArray(displayPoints) && displayPoints.length) {
-                          const lastPt = displayPoints[displayPoints.length - 1];
-                          if (typeof lastPt?.xTs === 'number' && typeof domainMax === 'number' && lastPt.xTs < domainMax) {
-                            chartData = [...displayPoints, { xTs: domainMax, price: lastPt.price }];
-                          }
-                        }
                         return (
                           <XAxis dataKey="xTs" type="number" scale="time" allowDataOverflow={false} domain={[domainMin, domainMax]} tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={30} padding={{ left: 0, right: 0 }} interval="preserveStartEnd"
                           tickFormatter={(ts) => {
@@ -1092,7 +1103,7 @@ useEffect(() => {
                           return d.toLocaleDateString([], { month: '2-digit', day: '2-digit' });
                         }}
                       />
-                      <Area type="monotone" dataKey="price" stroke="#34C759" fill="url(#grad)" strokeWidth={2} data={chartData} />
+                      <Area type="monotone" dataKey="price" stroke="#34C759" fill="url(#grad)" strokeWidth={2} />
                     </AreaChart>
                   );
                 })()}
