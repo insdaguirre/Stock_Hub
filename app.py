@@ -384,6 +384,19 @@ def fetch_intraday(symbol: str, interval: str = '1min'):
     open_time = datetime.combine(session_date, datetime.min.time(), et).replace(hour=9, minute=30)
     close_time = datetime.combine(session_date, datetime.min.time(), et).replace(hour=16, minute=0)
 
+    # Helper: determine if a day's intraday series appears complete (near session close)
+    def _is_full_session(points_list):
+        try:
+            if not points_list or len(points_list) < 10:
+                return False
+            last_iso = points_list[-1].get('date')
+            if not last_iso:
+                return False
+            last_dt = datetime.fromisoformat(last_iso)
+            return last_dt.hour >= 15 and last_dt.minute >= 58
+        except Exception:
+            return False
+
     # Prefer Finnhub when available
     if FINNHUB_API_KEY:
         def fetch_candles(day_date):
@@ -407,19 +420,17 @@ def fetch_intraday(symbol: str, interval: str = '1min'):
             return out
 
         points = sorted(fetch_candles(session_date), key=lambda x: x['time'])
-        # Only fall back to prior trading day if the market is currently CLOSED.
-        # If market is OPEN and we got no Finnhub data (e.g., provider delay), continue to Alpha Vantage below.
-        market_is_open = (now_et.weekday() < 5 and open_time <= now_et <= close_time)
-        if len(points) < 2 and not market_is_open:
-            # try last trading day by stepping back one day at a time up to 5 days
+        # Always prefer a completed prior trading day if today's session isn't complete yet
+        if not _is_full_session(points):
             for delta in range(1, 6):
                 prev_day = session_date - timedelta(days=delta)
                 pts = sorted(fetch_candles(prev_day), key=lambda x: x['time'])
-                if len(pts) >= 2:
+                if _is_full_session(pts):
                     points = pts
                     break
         # If still empty, fall back to Alpha Vantage below
         if len(points) >= 2:
+            market_is_open = (now_et.weekday() < 5 and open_time <= now_et <= close_time)
             state = 'open' if market_is_open else 'closed'
             result = {"points": points, "market": state, "asOf": now_et.isoformat()}
             _cache_set(cache_key, json.dumps(result), ttl_seconds=60)
@@ -470,8 +481,8 @@ def fetch_intraday(symbol: str, interval: str = '1min'):
 
     # Primary: today's regular session
     points = extract_for_day(session_date)
-    # Fallback: if provider returns no data for today (weekend/holiday/late evening), use last available trading day
-    if len(points) < 2:
+    # If today's session isn't complete, fallback to the last available full trading day
+    if not _is_full_session(points):
         unique_dates = set()
         for ts_str in series.keys():
             try:
@@ -480,9 +491,12 @@ def fetch_intraday(symbol: str, interval: str = '1min'):
             except Exception:
                 continue
         if unique_dates:
-            last_day = max(d for d in unique_dates if d <= session_date)
-            if last_day:
-                points = extract_for_day(last_day)
+            prior_days = sorted([d for d in unique_dates if d < session_date], reverse=True)
+            for d in prior_days:
+                pts = extract_for_day(d)
+                if _is_full_session(pts):
+                    points = pts
+                    break
     state = 'open' if (now_et.weekday() < 5 and open_time <= now_et <= close_time) else 'closed'
     result = {"points": points, "market": state, "asOf": now_et.isoformat()}
     # Short cache as data moves intraday

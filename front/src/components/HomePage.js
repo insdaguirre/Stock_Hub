@@ -991,13 +991,9 @@ useEffect(() => {
             {series && series.points && series.points.length >= 2 ? (
               <ResponsiveContainer width="100%" height="100%" key={range}>
                 {(() => {
-                  // Filter to as-of at render-time to prevent any drift
+                  // For 1D we will always use the last full day already provided by backend; don't clamp by as-of
                   const lastPointTsAll = series.points[series.points.length - 1]?.xTs;
-                  const asOfTsAll = intraday && intraday.asOf ? new Date(intraday.asOf).getTime() : undefined;
-                  const maxAllowedTs = (range === '1D') ? (typeof asOfTsAll === 'number' ? Math.min(asOfTsAll, lastPointTsAll || asOfTsAll) : (lastPointTsAll || Date.now())) : (lastPointTsAll || Date.now());
-                  let displayPoints = (range === '1D')
-                    ? (series.points || []).filter(p => typeof p.xTs === 'number' && p.xTs <= maxAllowedTs)
-                    : series.points;
+                  let displayPoints = series.points;
                   // Do not clear display at render-time; rely on fetch cadence to correct stale caches
                   // Build extended points to fill width to axis max
                   let extendedPoints = displayPoints;
@@ -1017,8 +1013,7 @@ useEffect(() => {
                         const asOfIso = intraday?.asOf || '';
                         const off = typeof asOfIso === 'string' ? asOfIso.slice(-6) : '-05:00';
                         const closeTs = new Date(`${targetDate}T16:00:00${off}`).getTime();
-                        const asOfTs = intraday && intraday.asOf ? new Date(intraday.asOf).getTime() : null;
-                        const maxTs = (intraday && intraday.market === 'open' && typeof asOfTs === 'number') ? asOfTs : closeTs;
+                        const maxTs = closeTs;
                         const lastPt = displayPoints[displayPoints.length - 1];
                         if (typeof lastPt?.xTs === 'number' && lastPt.xTs < maxTs) {
                           extendedPoints = [...displayPoints, { xTs: maxTs, price: lastPt.price }];
