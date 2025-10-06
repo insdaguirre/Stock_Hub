@@ -275,6 +275,12 @@ const IntradayCard = styled.div`
   border: 1px solid #1F1F20;
 `;
 
+const DisclaimerText = styled.div`
+  font-size: 11px;
+  color: #8e8e93;
+  margin: 4px 0 8px 0;
+`;
+
 const RangeTabs = styled.div`
   display: flex;
   gap: 8px;
@@ -542,6 +548,7 @@ const HomePage = () => {
   const [range, setRange] = useState('1D');
   const [series, setSeries] = useState(null);
   const [overview, setOverview] = useState(null);
+  const [lastFullDate, setLastFullDate] = useState(null); // 'YYYY-MM-DD' of the last closed market day
   const seriesCacheRef = useRef({}); // { '1D': [{xTs, price}], '1W': [...] }
 
   // Local storage cache helpers (persist across reloads)
@@ -786,6 +793,17 @@ useEffect(() => {
       seriesCacheRef.current['1D'] = pts || [];
       // Persist 1D cache with dynamic TTL based on market state
       try { saveToStorage(selectedSymbol, '1D', pts || [], intrResp?.market); } catch (_) {}
+      // Track the last full market day date for clamping other ranges
+      try {
+        const lp = pts && pts.length ? pts[pts.length - 1] : null;
+        if (lp && typeof lp.xTs === 'number') {
+          const d = new Date(lp.xTs);
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const da = String(d.getDate()).padStart(2, '0');
+          setLastFullDate(`${y}-${m}-${da}`);
+        }
+      } catch (_) {}
       setSeries({ points: pts || [] });
       // background prefetch
       ['1W','1M','3M'].forEach(async (r) => {
@@ -797,14 +815,26 @@ useEffect(() => {
             const priceNum = p && typeof p.price === 'number' ? p.price : Number(p.price);
             return { xTs, price: priceNum };
           });
-          seriesCacheRef.current[r] = ptsArr;
-          saveToStorage(selectedSymbol, r, ptsArr);
+          const clamped = (lastFullDate && ptsArr && ptsArr.length)
+            ? ptsArr.filter(pt => {
+                try {
+                  const d = new Date(pt.xTs);
+                  const y = d.getFullYear();
+                  const m = String(d.getMonth() + 1).padStart(2, '0');
+                  const da = String(d.getDate()).padStart(2, '0');
+                  const dayStr = `${y}-${m}-${da}`;
+                  return dayStr <= lastFullDate;
+                } catch (_) { return true; }
+              })
+            : ptsArr;
+          seriesCacheRef.current[r] = clamped;
+          saveToStorage(selectedSymbol, r, clamped);
         } catch (_) {}
       });
     };
     load();
     return () => { mounted = false; };
-  }, [selectedSymbol]);
+  }, [selectedSymbol, lastFullDate]);
 
   const handleSearch = (e) => {
     setSearchTerm(e.target.value);
@@ -925,6 +955,9 @@ useEffect(() => {
             <div style={{ fontWeight: 600 }}>Intraday • {selectedSymbol}</div>
             <div style={{ color: '#8e8e93', fontSize: 12 }}>{intraday.market === 'open' ? 'Market open' : 'Market closed'} • as of {new Date(intraday.asOf).toLocaleTimeString()}</div>
           </div>
+          <DisclaimerText>
+            Due to data pricing, charts display data up to the last closed market day.
+          </DisclaimerText>
           <RangeTabs>
             {['1D','1W','1M','3M','6M','YTD','1Y','2Y','5Y','10Y'].map(r => (
               <RangeTab key={r} active={range === r} onClick={async () => {
