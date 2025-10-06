@@ -994,8 +994,6 @@ useEffect(() => {
                   // For 1D we will always use the last full day already provided by backend; don't clamp by as-of
                   let displayPoints = series.points;
                   // Do not clear display at render-time; rely on fetch cadence to correct stale caches
-                  // Build extended points to fill width to axis max
-                  let extendedPoints = displayPoints;
                   // Render chart with full-day points
                   return (
                     <AreaChart data={displayPoints} margin={{ top: 8, right: 16, left: 0, bottom: 0 }} key={`${range}-chart`}>
