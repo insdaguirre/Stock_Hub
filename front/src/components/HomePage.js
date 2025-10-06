@@ -528,8 +528,12 @@ const models = [
 
 const HomePage = () => {
   const navigate = useNavigate();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedSymbol, setSelectedSymbol] = useState('SPY'); // Default to S&P 500 ETF
+  const [searchTerm, setSearchTerm] = useState(() => {
+    try { return localStorage.getItem('sh:lastSymbol') || ''; } catch (_) { return ''; }
+  });
+  const [selectedSymbol, setSelectedSymbol] = useState(() => {
+    try { return localStorage.getItem('sh:lastSymbol') || 'SPY'; } catch (_) { return 'SPY'; }
+  }); // Default to S&P 500 ETF
   const [predictionsData, setPredictionsData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -596,6 +600,25 @@ useEffect(() => {
     }
   } catch (_) {}
 }, [selectedSymbol]);
+
+// Restore last selected symbol and predicted models to avoid base state after return
+useEffect(() => {
+  try {
+    const lastSym = localStorage.getItem('sh:lastSymbol');
+    if (lastSym && /^[A-Z]{1,5}$/.test(lastSym)) {
+      setSelectedSymbol(lastSym);
+    }
+    const pred = localStorage.getItem('sh:lastPredModelData');
+    if (pred) {
+      const js = JSON.parse(pred);
+      if (js && js.symbol && js.models) {
+        setPredictionsData({ models: js.models, historicalData: [] });
+        setLastUpdated(new Date(js.at));
+      }
+    }
+  } catch (_) {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
 
   const saveToStorage = (sym, r, points, marketState = null) => {
     try {
@@ -688,6 +711,7 @@ useEffect(() => {
       setApiLatencyMs(Math.max(1, Math.round(t1 - t0)));
       setLastUpdated(new Date());
       setPredictionsData(data);
+      try { localStorage.setItem('sh:lastPredModelData', JSON.stringify({ symbol: selectedSymbol, at: Date.now(), models: data.models })); } catch (_) {}
       // Chart data is fetched separately on symbol change
       // Ensure intraday chart does not disappear after predictions complete
       setSeries(prev => {
@@ -851,7 +875,9 @@ useEffect(() => {
     setSearchTerm(e.target.value);
     // If it looks like a valid stock symbol, update selectedSymbol
     if (/^[A-Z]{1,5}$/.test(e.target.value.toUpperCase())) {
-      setSelectedSymbol(e.target.value.toUpperCase());
+      const sym = e.target.value.toUpperCase();
+      setSelectedSymbol(sym);
+      try { localStorage.setItem('sh:lastSymbol', sym); } catch (_) {}
     }
   };
 
