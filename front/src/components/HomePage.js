@@ -996,32 +996,9 @@ useEffect(() => {
                   // Do not clear display at render-time; rely on fetch cadence to correct stale caches
                   // Build extended points to fill width to axis max
                   let extendedPoints = displayPoints;
-                  if (range === '1D' && Array.isArray(displayPoints) && displayPoints.length) {
-                    try {
-                      let targetDate;
-                      if (intraday && intraday.asOf) {
-                        const asOfIso = intraday.asOf;
-                        const match = typeof asOfIso === 'string' ? asOfIso.match(/^(\d{4}-\d{2}-\d{2})T/) : null;
-                        if (match) targetDate = match[1];
-                      }
-                      if (!targetDate) {
-                        const ld = new Date(displayPoints[displayPoints.length - 1].xTs);
-                        targetDate = `${ld.getFullYear()}-${String(ld.getMonth()+1).padStart(2,'0')}-${String(ld.getDate()).padStart(2,'0')}`;
-                      }
-                      if (targetDate) {
-                        const asOfIso = intraday?.asOf || '';
-                        const off = typeof asOfIso === 'string' ? asOfIso.slice(-6) : '-05:00';
-                        const closeTs = new Date(`${targetDate}T16:00:00${off}`).getTime();
-                        const maxTs = closeTs;
-                        const lastPt = displayPoints[displayPoints.length - 1];
-                        if (typeof lastPt?.xTs === 'number' && lastPt.xTs < maxTs) {
-                          extendedPoints = [...displayPoints, { xTs: maxTs, price: lastPt.price }];
-                        }
-                      }
-                    } catch (_) {}
-                  }
+                  // Do not artificially extend to close; rely on full-day data from API
                   return (
-                    <AreaChart data={extendedPoints} margin={{ top: 8, right: 16, left: 0, bottom: 0 }} key={`${range}-chart`}>
+                    <AreaChart data={displayPoints} margin={{ top: 8, right: 16, left: 0, bottom: 0 }} key={`${range}-chart`}>
                       <defs>
                         <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="#34C759" stopOpacity={0.4} />
@@ -1062,10 +1039,8 @@ useEffect(() => {
                               const closeIso = `${targetDate}T16:00:00${off}`;
                               const openTs = new Date(openIso).getTime();
                               const closeTs = new Date(closeIso).getTime();
-                              const asOfTs = intraday && intraday.asOf ? new Date(intraday.asOf).getTime() : null;
                               domainMin = openTs;
-                              // If market is open, stretch to current time so the data occupies the full width; otherwise to close
-                              domainMax = (intraday && intraday.market === 'open' && typeof asOfTs === 'number') ? asOfTs : closeTs;
+                              domainMax = closeTs;
                             }
                           } catch (_) {}
                         }
