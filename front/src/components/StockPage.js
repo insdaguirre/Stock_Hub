@@ -290,14 +290,6 @@ const StockPage = () => { //Defines StockPage as a functional react component
           try {
             const base = process.env.PUBLIC_URL || '/Stock_Hub';
             window.location.assign(base.endsWith('/') ? base : base + '/');
-          } catch (_) {
-            navigate('/');
-          }
-        }}>Return to Hub</BackButton>
-        <BackButton onClick={() => {
-          try {
-            const base = process.env.PUBLIC_URL || '/Stock_Hub';
-            window.location.assign(base.endsWith('/') ? base : base + '/');
           } catch (_) { navigate('/'); }
         }}>Return to Hub</BackButton>
       </Header>
