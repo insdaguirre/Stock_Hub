@@ -1152,7 +1152,10 @@ useEffect(() => {
       )}
 
       {/* Predict Section (moved below chart) */}
-      <div style={{ fontSize: 18, fontWeight: 600, margin: '8px 0 8px 2px' }}>Predict</div>
+      <div style={{ fontSize: 18, fontWeight: 600, margin: '8px 0 4px 2px' }}>Predict</div>
+      <DisclaimerText>
+        Due to data pricing, the model pipeline and auto-trainer have been scaled down.
+      </DisclaimerText>
       <SearchInput
         type="text"
         placeholder="Enter stock symbol (e.g., AAPL, MSFT, GOOGL)"
