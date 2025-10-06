@@ -393,7 +393,14 @@ def fetch_intraday(symbol: str, interval: str = '1min'):
             if not last_iso:
                 return False
             last_dt = datetime.fromisoformat(last_iso)
-            return last_dt.hour >= 15 and last_dt.minute >= 58
+            # Normalize tzinfo to ET if missing
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=et)
+            # Session close for that day in ET
+            day = last_dt.date()
+            day_close = datetime.combine(day, datetime.min.time(), et).replace(hour=16, minute=0)
+            # Consider session full if we have data within the last 2 minutes before/at close
+            return last_dt >= (day_close - timedelta(minutes=2))
         except Exception:
             return False
 
