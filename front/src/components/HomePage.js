@@ -996,7 +996,7 @@ useEffect(() => {
                   // Do not clear display at render-time; rely on fetch cadence to correct stale caches
                   // Build extended points to fill width to axis max
                   let extendedPoints = displayPoints;
-                  // Do not artificially extend to close; rely on full-day data from API
+                  // Render chart with full-day points
                   return (
                     <AreaChart data={displayPoints} margin={{ top: 8, right: 16, left: 0, bottom: 0 }} key={`${range}-chart`}>
                       <defs>
