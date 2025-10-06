@@ -13,6 +13,14 @@ const inferProdBase = () => {
 };
 export const BASE_URL = process.env.REACT_APP_API_BASE_URL || inferProdBase();
 
+// Persist last predictions summary for hydration after navigation
+export const saveLastPredictions = (symbol, payload) => {
+  try { localStorage.setItem(`sh:lastPred:${symbol}`, JSON.stringify(payload)); } catch (_) {}
+};
+export const loadLastPredictions = (symbol) => {
+  try { const raw = localStorage.getItem(`sh:lastPred:${symbol}`); return raw ? JSON.parse(raw) : null; } catch (_) { return null; }
+};
+
 // Legacy client-side prediction functions removed - backend handles all predictions now
 
 // Main prediction function that combines all models

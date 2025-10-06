@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
-import { getPredictions, BASE_URL, getApiStatus, getNews, getIntraday, getTimeSeries, getOverview } from '../services/api';
+import { getPredictions, BASE_URL, getApiStatus, getNews, getIntraday, getTimeSeries, getOverview, loadLastPredictions } from '../services/api';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import ProgressBar from './ProgressBar';
 
@@ -585,6 +585,17 @@ useEffect(() => {
   } catch (_) {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
+
+// Restore last predictions UI state after returning from StockPage
+useEffect(() => {
+  try {
+    const last = loadLastPredictions(selectedSymbol);
+    if (last && last.predictions) {
+      setLastUpdated(new Date(last.at));
+      // We don't render predictions list here, but preserving timestamp helps the footer
+    }
+  } catch (_) {}
+}, [selectedSymbol]);
 
   const saveToStorage = (sym, r, points, marketState = null) => {
     try {

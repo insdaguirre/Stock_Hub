@@ -5,7 +5,7 @@ import React, { useEffect, useState } from 'react'; //React is the core library 
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'; //A react hook for performing side effects in functional components
 import styled from 'styled-components';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'; //A library for building charts in react
-import { getStockData, getPredictions } from '../services/api'; //Functions ipported from an API service module to fetch stock data and predictions
+import { getStockData, getPredictions, saveLastPredictions } from '../services/api'; //Functions ipported from an API service module to fetch stock data and predictions
 import ProgressBar from './ProgressBar';
 
 const Container = styled.div`
@@ -219,6 +219,7 @@ const StockPage = () => { //Defines StockPage as a functional react component
         setTimeout(() => {
           setStockData(stockResponse);
           setPredictions(predictionResponse);
+          try { saveLastPredictions(symbol, { stockData: stockResponse, predictions: predictionResponse, at: Date.now() }); } catch (_) {}
           setLoading(false);
         }, 500);
         
@@ -286,7 +287,20 @@ const StockPage = () => { //Defines StockPage as a functional react component
             </span>
           </StockPrice>
         </StockInfo>
-        <BackButton onClick={() => navigate('/')}>Return to Hub</BackButton>
+        <BackButton onClick={() => {
+          try {
+            const base = process.env.PUBLIC_URL || '/Stock_Hub';
+            window.location.assign(base.endsWith('/') ? base : base + '/');
+          } catch (_) {
+            navigate('/');
+          }
+        }}>Return to Hub</BackButton>
+        <BackButton onClick={() => {
+          try {
+            const base = process.env.PUBLIC_URL || '/Stock_Hub';
+            window.location.assign(base.endsWith('/') ? base : base + '/');
+          } catch (_) { navigate('/'); }
+        }}>Return to Hub</BackButton>
       </Header>
 
       <ChartContainer>
