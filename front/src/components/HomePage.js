@@ -992,7 +992,6 @@ useEffect(() => {
               <ResponsiveContainer width="100%" height="100%" key={range}>
                 {(() => {
                   // For 1D we will always use the last full day already provided by backend; don't clamp by as-of
-                  const lastPointTsAll = series.points[series.points.length - 1]?.xTs;
                   let displayPoints = series.points;
                   // Do not clear display at render-time; rely on fetch cadence to correct stale caches
                   // Build extended points to fill width to axis max
