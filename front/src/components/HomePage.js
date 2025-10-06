@@ -1012,33 +1012,19 @@ useEffect(() => {
                         let domainMax = lastPointTs || Date.now();
                         if (range === '1D') {
                           try {
-                            // Determine the trading day to display
-                            let targetDate;
-                            if (intraday && intraday.asOf) {
-                              // Use the date from the API response
-                              const asOfIso = intraday.asOf;
-                              const dateMatch = typeof asOfIso === 'string' ? asOfIso.match(/^(\d{4}-\d{2}-\d{2})T/) : null;
-                              if (dateMatch) {
-                                targetDate = dateMatch[1];
-                              }
-                            }
-                            
-                            // If we couldn't get date from asOf, use the last data point's date
-                            if (!targetDate && displayPoints && displayPoints.length > 0) {
+                            // Determine the trading day to display strictly from the data's last point (avoid asOf mismatch)
+                            if (displayPoints && displayPoints.length > 0) {
                               const lastPointDate = new Date(displayPoints[displayPoints.length - 1].xTs);
-                              targetDate = `${lastPointDate.getFullYear()}-${String(lastPointDate.getMonth() + 1).padStart(2, '0')}-${String(lastPointDate.getDate()).padStart(2, '0')}`;
-                            }
-                            
-                            if (targetDate) {
-                              // Get timezone offset from asOf or use Eastern Time
+                              const y = lastPointDate.getFullYear();
+                              const m = String(lastPointDate.getMonth() + 1).padStart(2, '0');
+                              const d = String(lastPointDate.getDate()).padStart(2, '0');
+                              // Use ET offset from asOf if available; otherwise default to -05:00 (handles non-DST; acceptable for domain only)
                               const asOfIso = intraday?.asOf || '';
-                              const off = typeof asOfIso === 'string' ? asOfIso.slice(-6) : '-05:00'; // Default to ET
-                              const openIso = `${targetDate}T09:30:00${off}`;
-                              const closeIso = `${targetDate}T16:00:00${off}`;
-                              const openTs = new Date(openIso).getTime();
-                              const closeTs = new Date(closeIso).getTime();
-                              domainMin = openTs;
-                              domainMax = closeTs;
+                              const off = typeof asOfIso === 'string' ? asOfIso.slice(-6) : '-05:00';
+                              const openIso = `${y}-${m}-${d}T09:30:00${off}`;
+                              const closeIso = `${y}-${m}-${d}T16:00:00${off}`;
+                              domainMin = new Date(openIso).getTime();
+                              domainMax = new Date(closeIso).getTime();
                             }
                           } catch (_) {}
                         }
