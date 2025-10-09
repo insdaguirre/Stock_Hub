@@ -34,6 +34,12 @@ const DateText = styled.h2`
   font-weight: normal;
 `;
 
+const DevTag = styled.div`
+  font-size: 11px;
+  color: #6b6b70;
+  margin: -10px 0 10px 0;
+`;
+
 const SectionHeader = styled.div`
   display: flex;
   align-items: center;
@@ -953,6 +959,7 @@ useEffect(() => {
       <Header>
         <Title>Stock Hub</Title>
         <DateText>{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</DateText>
+        <DevTag>deegz dev</DevTag>
       </Header>
 
       {/* News Section */}
