@@ -3,15 +3,16 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import styled from 'styled-components';
 import { FaChartLine, FaCode, FaHome } from 'react-icons/fa';
+import colors from '../styles/colors';
 
 const NavContainer = styled.nav`
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  border-bottom: 2px solid #00d4aa;
+  background: ${colors.gradientDark};
+  border-bottom: 1px solid ${colors.border};
   padding: 0 2rem;
   position: sticky;
   top: 0;
   z-index: 1000;
-  box-shadow: 0 4px 20px rgba(0, 212, 170, 0.1);
+  box-shadow: 0 2px 8px ${colors.shadowLight};
 `;
 
 const NavContent = styled.div`
@@ -35,24 +36,25 @@ const Logo = styled.div`
 `;
 
 const LogoIcon = styled.div`
-  background: linear-gradient(135deg, #00d4aa, #00a8cc);
-  color: #000;
+  background: ${colors.cardBackground};
+  color: ${colors.bullGreen};
   width: 40px;
   height: 40px;
-  border-radius: 8px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: bold;
   font-size: 18px;
   margin-right: 12px;
-  box-shadow: 0 4px 12px rgba(0, 212, 170, 0.3);
+  border: 1px solid ${colors.border};
+  box-shadow: 0 2px 4px ${colors.shadowLight};
 `;
 
 const LogoText = styled.h1`
   font-size: 24px;
   font-weight: 700;
-  color: #ffffff;
+  color: ${colors.textPrimary};
   margin: 0;
   letter-spacing: -0.5px;
 `;
@@ -68,20 +70,20 @@ const NavLink = styled.div`
   align-items: center;
   gap: 8px;
   padding: 12px 20px;
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   font-weight: 500;
   font-size: 16px;
-  color: ${props => props.active ? '#00d4aa' : '#b0b0b0'};
-  background: ${props => props.active ? 'rgba(0, 212, 170, 0.1)' : 'transparent'};
-  border: ${props => props.active ? '1px solid rgba(0, 212, 170, 0.3)' : '1px solid transparent'};
+  color: ${props => props.active ? colors.bullGreen : colors.textSecondary};
+  background: ${props => props.active ? colors.hover : 'transparent'};
+  border: ${props => props.active ? `1px solid ${colors.bullGreen}` : '1px solid transparent'};
   
   &:hover {
-    color: #00d4aa;
-    background: rgba(0, 212, 170, 0.1);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 212, 170, 0.2);
+    color: ${colors.bullGreen};
+    background: ${colors.hover};
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px ${colors.shadowMedium};
   }
 `;
 

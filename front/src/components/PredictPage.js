@@ -5,11 +5,12 @@ import styled from 'styled-components';
 import { getPredictions, getIntraday, getTimeSeries, getOverview, loadLastPredictions } from '../services/api';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import ProgressBar from './ProgressBar';
+import colors from '../styles/colors';
 
 const PageContainer = styled.div`
   min-height: 100vh;
-  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
-  color: #ffffff;
+  background: ${colors.gradientDark};
+  color: ${colors.textPrimary};
   display: flex;
   flex-direction: column;
 `;
@@ -31,16 +32,13 @@ const Title = styled.h1`
   font-size: clamp(32px, 4vw, 48px);
   font-weight: 800;
   margin: 0 0 1rem 0;
-  background: linear-gradient(135deg, #00d4aa, #00a8cc);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: ${colors.textPrimary};
   letter-spacing: -1px;
 `;
 
 const Subtitle = styled.p`
   font-size: clamp(16px, 2vw, 20px);
-  color: #b0b0b0;
+  color: ${colors.textSecondary};
   margin: 0 0 2rem 0;
   font-weight: 300;
   line-height: 1.5;
@@ -48,19 +46,19 @@ const Subtitle = styled.p`
 
 const DisclaimerText = styled.div`
   font-size: 14px;
-  color: #8e8e93;
+  color: ${colors.textTertiary};
   margin: 1rem 0 2rem 0;
   text-align: center;
   padding: 1rem;
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  border: 1px solid #333;
-  border-radius: 12px;
+  background: ${colors.surfaceBackground};
+  border: 1px solid ${colors.border};
+  border-radius: 6px;
 `;
 
 const SearchSection = styled.div`
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  border: 1px solid #333;
-  border-radius: 12px;
+  background: ${colors.gradientCard};
+  border: 1px solid ${colors.border};
+  border-radius: 8px;
   padding: 2rem;
   margin-bottom: 2rem;
 `;
@@ -68,22 +66,22 @@ const SearchSection = styled.div`
 const SearchInput = styled.input`
   width: 100%;
   padding: 16px 20px;
-  background: #0a0a0a;
-  border: 2px solid #333;
-  border-radius: 8px;
-  color: #ffffff;
+  background: ${colors.darkBackground};
+  border: 1px solid ${colors.border};
+  border-radius: 6px;
+  color: ${colors.textPrimary};
   font-size: 16px;
   margin-bottom: 1rem;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   
   &:focus {
     outline: none;
-    border-color: #00d4aa;
-    box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.1);
+    border-color: ${colors.bullGreen};
+    box-shadow: 0 0 0 2px ${colors.focus};
   }
   
   &::placeholder {
-    color: #666;
+    color: ${colors.textTertiary};
   }
 `;
 
@@ -97,11 +95,11 @@ const StockSelector = styled.div`
 const StockSelectorTitle = styled.div`
   font-size: 18px;
   font-weight: 600;
-  color: #ffffff;
+  color: ${colors.textPrimary};
 `;
 
 const PredictButton = styled.button`
-  background: linear-gradient(135deg, #00d4aa, #00a8cc);
+  background: ${colors.bullGreen};
   color: #000;
   border: none;
   padding: 12px 24px;
@@ -124,7 +122,7 @@ const PredictButton = styled.button`
 
 const IntradayCard = styled.div`
   background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  border: 1px solid #333;
+  border: 1px solid ${colors.border};
   border-radius: 12px;
   padding: 1.5rem;
   margin: 1.5rem 0;
@@ -140,11 +138,11 @@ const ChartHeader = styled.div`
 const ChartTitle = styled.div`
   font-size: 18px;
   font-weight: 600;
-  color: #ffffff;
+  color: ${colors.textPrimary};
 `;
 
 const MarketStatus = styled.div`
-  color: #8e8e93;
+  color: ${colors.textTertiary};
   font-size: 12px;
 `;
 
@@ -158,18 +156,18 @@ const RangeTabs = styled.div`
 const RangeTab = styled.button`
   padding: 8px 16px;
   border-radius: 8px;
-  border: 1px solid ${props => props.active ? '#00d4aa' : '#333'};
+  border: 1px solid ${props => props.active ? colors.bullGreen : colors.border};
   background: ${props => props.active ? 'rgba(0, 212, 170, 0.1)' : 'transparent'};
-  color: ${props => props.active ? '#00d4aa' : '#b0b0b0'};
+  color: ${props => props.active ? colors.bullGreen : colors.textSecondary};
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
   transition: all 0.3s ease;
   
   &:hover {
-    color: #00d4aa;
+    color: ${colors.bullGreen};
     background: rgba(0, 212, 170, 0.1);
-    border-color: #00d4aa;
+    border-color: ${colors.bullGreen};
   }
 `;
 
@@ -187,7 +185,7 @@ const StatsGrid = styled.div`
 
 const StatCard = styled.div`
   background: #0a0a0a;
-  border: 1px solid #333;
+  border: 1px solid ${colors.border};
   border-radius: 8px;
   padding: 12px;
   text-align: center;
@@ -195,19 +193,19 @@ const StatCard = styled.div`
 
 const StatLabel = styled.div`
   font-size: 12px;
-  color: #8e8e93;
+  color: ${colors.textTertiary};
   margin-bottom: 4px;
 `;
 
 const StatValue = styled.div`
   font-size: 16px;
-  color: #ffffff;
+  color: ${colors.textPrimary};
   font-weight: 600;
 `;
 
 const LoadingContainer = styled.div`
   background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  border: 1px solid #333;
+  border: 1px solid ${colors.border};
   border-radius: 12px;
   padding: 2rem;
   margin: 1.5rem 0;
@@ -215,7 +213,7 @@ const LoadingContainer = styled.div`
 
 const LoadingTitle = styled.h3`
   font-size: 20px;
-  color: #ffffff;
+  color: ${colors.textPrimary};
   margin: 0 0 1rem 0;
   text-align: center;
 `;
@@ -236,7 +234,7 @@ const ModelsList = styled.div`
 
 const ModelCard = styled.div`
   background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  border: 1px solid #333;
+  border: 1px solid ${colors.border};
   border-radius: 12px;
   padding: 1.5rem;
   cursor: pointer;
@@ -244,7 +242,7 @@ const ModelCard = styled.div`
   
   &:hover {
     transform: translateY(-4px);
-    border-color: #00d4aa;
+    border-color: ${colors.bullGreen};
     box-shadow: 0 8px 25px rgba(0, 212, 170, 0.2);
   }
 `;
@@ -256,13 +254,13 @@ const ModelInfo = styled.div`
 const ModelName = styled.div`
   font-size: 18px;
   font-weight: 600;
-  color: #ffffff;
+  color: ${colors.textPrimary};
   margin-bottom: 4px;
 `;
 
 const ModelDescription = styled.div`
   font-size: 14px;
-  color: #8e8e93;
+  color: ${colors.textTertiary};
 `;
 
 const ModelMetrics = styled.div`
@@ -283,28 +281,28 @@ const PredCol = styled.div`
 
 const PredLabel = styled.div`
   font-size: 12px;
-  color: #8e8e93;
+  color: ${colors.textTertiary};
   margin-bottom: 4px;
 `;
 
 const PredValue = styled.div`
   font-size: 16px;
   font-weight: 600;
-  color: ${props => props.value >= 0 ? '#00d4aa' : '#ff6b6b'};
+  color: ${props => props.value >= 0 ? colors.bullGreen : colors.bearRed};
 `;
 
 const Accuracy = styled.div`
   font-size: 14px;
-  color: #8e8e93;
+  color: ${colors.textTertiary};
   text-align: right;
 `;
 
 const ErrorMessage = styled.div`
   background: linear-gradient(135deg, #2d1b1b 0%, #3d2a2a 100%);
-  border: 1px solid #ff6b6b;
+  border: 1px solid ${colors.bearRed};
   border-radius: 12px;
   padding: 1rem;
-  color: #ff6b6b;
+  color: ${colors.bearRed};
   margin: 1rem 0;
   text-align: center;
 `;
@@ -319,7 +317,7 @@ const LoadingOverlay = styled.div`
   display: flex;
   justify-content: center;
   align-items: center;
-  color: #ffffff;
+  color: ${colors.textPrimary};
   font-size: 18px;
   border-radius: 12px;
 `;
@@ -758,18 +756,18 @@ const PredictPage = () => {
                   <AreaChart data={series.points} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#00d4aa" stopOpacity={0.4} />
-                        <stop offset="100%" stopColor="#00d4aa" stopOpacity={0} />
+                        <stop offset="0%" stopColor={colors.bullGreen} stopOpacity={0.4} />
+                        <stop offset="100%" stopColor={colors.bullGreen} stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                    <CartesianGrid strokeDasharray="3 3" stroke={colors.chartGrid} />
                     <XAxis 
                       dataKey="xTs" 
                       type="number" 
                       scale="time" 
                       allowDataOverflow={false} 
                       domain={[series.points[0]?.xTs || 'dataMin', series.points[series.points.length - 1]?.xTs || 'dataMax']} 
-                      tick={{ fill: '#8e8e93', fontSize: 12 }} 
+                      tick={{ fill: colors.textTertiary, fontSize: 12 }} 
                       axisLine={false} 
                       tickLine={false} 
                       minTickGap={30} 
@@ -786,10 +784,10 @@ const PredictPage = () => {
                         return d.toLocaleDateString([], { month: '2-digit', day: '2-digit' });
                       }}
                     />
-                    <YAxis dataKey="price" tick={{ fill: '#8e8e93', fontSize: 12 }} axisLine={false} tickLine={false} domain={['auto','auto']} />
+                    <YAxis dataKey="price" tick={{ fill: colors.textTertiary, fontSize: 12 }} axisLine={false} tickLine={false} domain={['auto','auto']} />
                     <Tooltip 
-                      contentStyle={{ background: '#1a1a1a', border: '1px solid #333', color: '#fff' }} 
-                      labelStyle={{ color: '#b0b0b0' }}
+                      contentStyle={{ background: colors.cardBackground, border: `1px solid ${colors.border}`, color: colors.textPrimary }} 
+                      labelStyle={{ color: colors.textSecondary }}
                       labelFormatter={(ts) => {
                         const d = new Date(ts);
                         if (range === '1D') {
@@ -801,11 +799,11 @@ const PredictPage = () => {
                         return d.toLocaleDateString([], { month: '2-digit', day: '2-digit' });
                       }}
                     />
-                    <Area type="monotone" dataKey="price" stroke="#00d4aa" fill="url(#grad)" strokeWidth={2} />
+                    <Area type="monotone" dataKey="price" stroke={colors.bullGreen} fill="url(#grad)" strokeWidth={2} />
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
-                <div style={{ color: '#8e8e93', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                <div style={{ color: colors.textTertiary, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
                   No intraday data available for the latest session.
                 </div>
               )}
@@ -937,7 +935,7 @@ const PredictPage = () => {
                         </PredCol>
                       </PredGrid>
                     ) : (
-                      <div style={{ color: '#8e8e93' }}>Loading...</div>
+                      <div style={{ color: colors.textTertiary }}>Loading...</div>
                     )}
                     <Accuracy>{cols ? cols.accuracy : '...'}</Accuracy>
                   </ModelMetrics>

@@ -2,10 +2,11 @@
 import React from 'react';
 import styled from 'styled-components';
 import { FaGithub, FaLinkedin, FaEnvelope } from 'react-icons/fa';
+import colors from '../styles/colors';
 
 const FooterContainer = styled.footer`
-  background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
-  border-top: 2px solid #00d4aa;
+  background: ${colors.gradientDark};
+  border-top: 1px solid ${colors.border};
   padding: 2rem 0;
   margin-top: auto;
 `;
@@ -27,23 +28,24 @@ const FooterBrand = styled.div`
 `;
 
 const BrandIcon = styled.div`
-  background: linear-gradient(135deg, #00d4aa, #00a8cc);
-  color: #000;
+  background: ${colors.cardBackground};
+  color: ${colors.bullGreen};
   width: 32px;
   height: 32px;
-  border-radius: 6px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: bold;
   font-size: 14px;
-  box-shadow: 0 2px 8px rgba(0, 212, 170, 0.3);
+  border: 1px solid ${colors.border};
+  box-shadow: 0 1px 3px ${colors.shadowLight};
 `;
 
 const BrandText = styled.h3`
   font-size: 18px;
   font-weight: 600;
-  color: #ffffff;
+  color: ${colors.textPrimary};
   margin: 0;
   letter-spacing: -0.3px;
 `;
@@ -59,20 +61,20 @@ const SocialLink = styled.a`
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  border-radius: 8px;
+  border-radius: 6px;
   text-decoration: none;
-  color: #b0b0b0;
+  color: ${colors.textSecondary};
   font-weight: 500;
   font-size: 14px;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   border: 1px solid transparent;
   
   &:hover {
-    color: #00d4aa;
-    background: rgba(0, 212, 170, 0.1);
-    border-color: rgba(0, 212, 170, 0.3);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 212, 170, 0.2);
+    color: ${colors.bullGreen};
+    background: ${colors.hover};
+    border-color: ${colors.bullGreen};
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px ${colors.shadowMedium};
   }
 `;
 
@@ -81,7 +83,7 @@ const IconWrapper = styled.div`
 `;
 
 const Copyright = styled.p`
-  color: #666;
+  color: ${colors.textTertiary};
   font-size: 12px;
   margin: 0;
   text-align: center;

@@ -5,11 +5,12 @@ import { FaChartLine } from 'react-icons/fa';
 import TickerCard from './TickerCard';
 import NewsCard from './NewsCard';
 import { getNews } from '../services/api';
+import colors from '../styles/colors';
 
 const PageContainer = styled.div`
   min-height: 100vh;
-  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
-  color: #ffffff;
+  background: ${colors.gradientDark};
+  color: ${colors.textPrimary};
   display: flex;
   flex-direction: column;
 `;
@@ -31,11 +32,21 @@ const Title = styled.h1`
   font-size: clamp(32px, 4vw, 48px);
   font-weight: 800;
   margin: 0 0 1rem 0;
-  background: linear-gradient(135deg, #00d4aa, #00a8cc);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: ${colors.textPrimary};
   letter-spacing: -1px;
+  position: relative;
+  
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80px;
+    height: 3px;
+    background: ${colors.bullGreen};
+    border-radius: 2px;
+  }
 `;
 
 
@@ -43,7 +54,7 @@ const Title = styled.h1`
 const SectionTitle = styled.h2`
   font-size: 28px;
   font-weight: 700;
-  color: #ffffff;
+  color: ${colors.textPrimary};
   margin: 0 0 1.5rem 0;
   text-align: center;
   position: relative;
@@ -56,7 +67,7 @@ const SectionTitle = styled.h2`
     transform: translateX(-50%);
     width: 60px;
     height: 3px;
-    background: linear-gradient(90deg, #00d4aa, #00a8cc);
+    background: ${colors.bullGreen};
     border-radius: 2px;
   }
 `;
@@ -76,12 +87,12 @@ const NewsGrid = styled.div`
 `;
 
 const ErrorMessage = styled.div`
-  background: linear-gradient(135deg, #2d1b1b 0%, #3d2a2a 100%);
-  border: 1px solid #ff6b6b;
-  border-radius: 12px;
+  background: ${colors.cardBackground};
+  border: 1px solid ${colors.bearRed};
+  border-radius: 8px;
   padding: 1.5rem;
   text-align: center;
-  color: #ff6b6b;
+  color: ${colors.bearRed};
   margin: 2rem 0;
 `;
 
@@ -90,7 +101,7 @@ const LoadingContainer = styled.div`
   justify-content: center;
   align-items: center;
   height: 200px;
-  color: #b0b0b0;
+  color: ${colors.textSecondary};
   font-size: 16px;
 `;
 
@@ -101,7 +112,7 @@ const CTA = styled.div`
 
 const CTAText = styled.p`
   font-size: 18px;
-  color: #b0b0b0;
+  color: ${colors.textSecondary};
   margin: 0 0 1.5rem 0;
 `;
 
@@ -109,18 +120,20 @@ const CTALink = styled.a`
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: linear-gradient(135deg, #00d4aa, #00a8cc);
-  color: #000;
+  background: ${colors.bullGreen};
+  color: ${colors.darkBackground};
   padding: 12px 24px;
-  border-radius: 8px;
+  border-radius: 6px;
   text-decoration: none;
   font-weight: 600;
   font-size: 16px;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
+  border: 1px solid ${colors.bullGreen};
   
   &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(0, 212, 170, 0.3);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px ${colors.shadowMedium};
+    background: ${colors.success};
   }
 `;
 

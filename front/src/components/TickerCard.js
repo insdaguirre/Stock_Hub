@@ -6,42 +6,28 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis } from 'recharts';
 import { FaArrowUp, FaArrowDown, FaExternalLinkAlt } from 'react-icons/fa';
 import { getTickerData } from '../services/api';
 import { requestQueue } from '../utils/requestQueue';
+import colors, { getPerformanceColor } from '../styles/colors';
 
 const CardContainer = styled.div`
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  border: 1px solid #333;
-  border-radius: 12px;
+  background: ${colors.gradientCard};
+  border: 1px solid ${colors.border};
+  border-radius: 8px;
   padding: 1.5rem;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   position: relative;
   overflow: hidden;
+  box-shadow: 0 2px 8px ${colors.shadowLight};
   
   &:hover {
-    transform: translateY(-4px);
-    border-color: #00d4aa;
-    box-shadow: 0 8px 25px rgba(0, 212, 170, 0.2);
+    transform: translateY(-2px);
+    border-color: ${props => props.positive ? colors.bullGreen : colors.bearRed};
+    box-shadow: 0 4px 16px ${colors.shadowMedium};
     
     .external-icon {
       opacity: 1;
       transform: translateX(0);
     }
-  }
-  
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, #00d4aa, #00a8cc);
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-  
-  &:hover::before {
-    opacity: 1;
   }
 `;
 
@@ -55,17 +41,19 @@ const CardHeader = styled.div`
 const TickerSymbol = styled.h3`
   font-size: 18px;
   font-weight: 700;
-  color: #ffffff;
+  color: ${colors.textPrimary};
   margin: 0;
   letter-spacing: 0.5px;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  font-variant-numeric: tabular-nums;
 `;
 
 const ExternalIcon = styled.div`
-  color: #666;
+  color: ${colors.textTertiary};
   font-size: 12px;
   opacity: 0;
   transform: translateX(-10px);
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 `;
 
 const PriceSection = styled.div`
@@ -78,7 +66,9 @@ const PriceSection = styled.div`
 const CurrentPrice = styled.div`
   font-size: 24px;
   font-weight: 700;
-  color: #ffffff;
+  color: ${colors.textPrimary};
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  font-variant-numeric: tabular-nums;
 `;
 
 const PriceChange = styled.div`
@@ -87,7 +77,9 @@ const PriceChange = styled.div`
   gap: 0.5rem;
   font-size: 14px;
   font-weight: 600;
-  color: ${props => props.positive ? '#00d4aa' : '#ff6b6b'};
+  color: ${props => props.positive ? colors.bullGreen : colors.bearRed};
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  font-variant-numeric: tabular-nums;
 `;
 
 const ChangeIcon = styled.div`
@@ -110,9 +102,10 @@ const TimeframeLabel = styled.div`
 const ChartContainer = styled.div`
   height: 60px;
   position: relative;
-  background: rgba(255, 255, 255, 0.02);
+  background: ${colors.surfaceBackground};
   border-radius: 4px;
   padding: 4px;
+  border: 1px solid ${colors.borderLight};
 `;
 
 const LoadingContainer = styled.div`
@@ -120,7 +113,7 @@ const LoadingContainer = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #666;
+  color: ${colors.textTertiary};
   font-size: 10px;
 `;
 
@@ -129,7 +122,7 @@ const ErrorContainer = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ff6b6b;
+  color: ${colors.bearRed};
   font-size: 10px;
 `;
 
@@ -139,7 +132,7 @@ const AxisContainer = styled.div`
   align-items: flex-end;
   margin-top: 4px;
   font-size: 8px;
-  color: #666;
+  color: ${colors.textTertiary};
 `;
 
 const YAxisContainer = styled.div`
@@ -152,9 +145,11 @@ const YAxisContainer = styled.div`
 
 const YAxisLabel = styled.div`
   font-size: 8px;
-  color: #666;
+  color: ${colors.textTertiary};
   text-align: right;
   line-height: 1;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  font-variant-numeric: tabular-nums;
 `;
 
 const XAxisContainer = styled.div`
@@ -166,10 +161,12 @@ const XAxisContainer = styled.div`
 
 const XAxisLabel = styled.div`
   font-size: 8px;
-  color: #666;
+  color: ${colors.textTertiary};
   text-align: center;
   flex: 1;
   line-height: 1;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  font-variant-numeric: tabular-nums;
 `;
 
 const TickerCard = ({ symbol, onError }) => {
@@ -242,7 +239,7 @@ const TickerCard = ({ symbol, onError }) => {
   const isPositive = priceChange >= 0;
 
   return (
-    <CardContainer onClick={handleClick}>
+    <CardContainer onClick={handleClick} positive={isPositive}>
       <CardHeader>
         <TickerSymbol>{symbol}</TickerSymbol>
         <ExternalIcon className="external-icon">
@@ -290,7 +287,7 @@ const TickerCard = ({ symbol, onError }) => {
                 <Line
                   type="monotone"
                   dataKey="price"
-                  stroke={isPositive ? '#00d4aa' : '#ff6b6b'}
+                  stroke={getPerformanceColor(priceChange)}
                   strokeWidth={2}
                   dot={false}
                   activeDot={false}
