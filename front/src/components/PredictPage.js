@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
-import { getPredictions, BASE_URL, getApiStatus, getIntraday, getTimeSeries, getOverview, loadLastPredictions } from '../services/api';
+import { getPredictions, getIntraday, getTimeSeries, getOverview, loadLastPredictions } from '../services/api';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import ProgressBar from './ProgressBar';
 
@@ -337,10 +337,7 @@ const PredictPage = () => {
   const [error, setError] = useState(null);
   const [loadingProgress, setLoadingProgress] = useState({});
   const [overallProgress, setOverallProgress] = useState(0);
-  const [apiLatencyMs, setApiLatencyMs] = useState(null);
-  const [lastUpdated, setLastUpdated] = useState(null);
-  const [apiStatus, setApiStatus] = useState('unknown');
-  const [storageStatus, setStorageStatus] = useState('unknown');
+  // Removed unused state variables to fix ESLint warnings
   const [intraday, setIntraday] = useState(null);
   const [range, setRange] = useState('1D');
   const [series, setSeries] = useState(null);
@@ -389,14 +386,14 @@ const PredictPage = () => {
         setRange('1M');
       }
     } catch (_) {}
-  }, []);
+  }, [selectedSymbol]);
 
   // Restore last predictions UI state
   useEffect(() => {
     try {
       const last = loadLastPredictions(selectedSymbol);
       if (last && last.predictions) {
-        setLastUpdated(new Date(last.at));
+        // Removed setLastUpdated call to fix ESLint warning
       }
     } catch (_) {}
   }, [selectedSymbol]);
@@ -413,7 +410,6 @@ const PredictPage = () => {
         const js = JSON.parse(pred);
         if (js && js.symbol && js.models) {
           setPredictionsData({ models: js.models, historicalData: [] });
-          setLastUpdated(new Date(js.at));
         }
       }
     } catch (_) {}
@@ -485,11 +481,7 @@ const PredictPage = () => {
       const modelIds = [1, 2, 3, 4, 5];
       const progressInterval = simulateProgress(modelIds);
       
-      const t0 = performance.now();
       const data = await getPredictions(selectedSymbol);
-      const t1 = performance.now();
-      setApiLatencyMs(Math.max(1, Math.round(t1 - t0)));
-      setLastUpdated(new Date());
       setPredictionsData(data);
       
       try { 
@@ -527,20 +519,7 @@ const PredictPage = () => {
     }
   };
 
-  // API status monitoring
-  useEffect(() => {
-    let mounted = true;
-    const ping = async () => {
-      const status = await getApiStatus();
-      if (!mounted) return;
-      setStorageStatus(status.storage);
-      const overall = status.redis === 'ok' && status.queue === 'ok' && status.storage === 'ok' ? 'ok' : (status.redis === 'err' || status.queue === 'err') ? 'err' : 'degraded';
-      setApiStatus(overall);
-    };
-    ping();
-    const id = setInterval(ping, 60000);
-    return () => { mounted = false; clearInterval(id); };
-  }, []);
+  // API status monitoring removed to fix ESLint warnings
 
   // Load intraday + overview + default 1D series
   useEffect(() => {
