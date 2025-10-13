@@ -1,0 +1,21 @@
+name: Nightly Precompute
+
+on:
+  schedule:
+    - cron: '15 3 * * *'  # 03:15 UTC nightly
+  workflow_dispatch:
+
+jobs:
+  call-precompute:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call precompute endpoint
+        env:
+          API_URL: ${{ secrets.PRECOMPUTE_API_URL }}
+          API_KEY: ${{ secrets.PRECOMPUTE_API_KEY }}
+          SYMBOLS: ${{ secrets.PRECOMPUTE_SYMBOLS || 'AAPL,MSFT,TSLA,NVDA' }}
+        run: |
+          if [ -z "$API_URL" ]; then
+            echo "PRECOMPUTE_API_URL secret not set"; exit 1; fi
+          curl -s -X POST "$API_URL/api/precompute?symbols=$SYMBOLS&api_key=$API_KEY" | jq .
+
