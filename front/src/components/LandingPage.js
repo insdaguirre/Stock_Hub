@@ -230,12 +230,11 @@ const LandingPage = () => {
             )}
             
             <TickerGrid>
-              {tickers.map((symbol, index) => (
+              {tickers.map((symbol) => (
                 <TickerCard
                   key={symbol}
                   symbol={symbol}
                   onError={handleTickerError}
-                  delay={index * 200} // Stagger requests by 200ms each
                 />
               ))}
             </TickerGrid>

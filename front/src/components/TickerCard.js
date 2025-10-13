@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis } from 'recharts';
 import { FaArrowUp, FaArrowDown, FaExternalLinkAlt } from 'react-icons/fa';
-import { getTimeSeries } from '../services/api';
+import { getYFinanceData } from '../services/api';
+import { requestQueue } from '../utils/requestQueue';
 
 const CardContainer = styled.div`
   background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
@@ -116,25 +117,20 @@ const ErrorContainer = styled.div`
   font-size: 12px;
 `;
 
-const TickerCard = ({ symbol, onError, delay = 0 }) => {
+const TickerCard = ({ symbol, onError }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchData = async (retryCount = 0) => {
+    const fetchData = async () => {
       try {
         setLoading(true);
         setError(null);
         
-        // Add delay to prevent overwhelming the browser with concurrent requests
-        if (delay > 0) {
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-        
-        // Fetch 5-day data for the mini chart
-        const response = await getTimeSeries(symbol, '5d');
+        // Use request queue to manage concurrent requests
+        const response = await requestQueue.add(() => getYFinanceData(symbol));
         
         if (response && response.series && response.series.points && response.series.points.length >= 2) {
           const points = response.series.points.slice(-5); // Last 5 days
@@ -152,15 +148,7 @@ const TickerCard = ({ symbol, onError, delay = 0 }) => {
           throw new Error('Insufficient data points');
         }
       } catch (err) {
-        console.error(`Error fetching data for ${symbol} (attempt ${retryCount + 1}):`, err);
-        
-        // Retry once after a delay if it's a network error
-        if (retryCount === 0 && (err.message.includes('ERR_INSUFFICIENT_RESOURCES') || err.message.includes('Failed to fetch'))) {
-          console.log(`Retrying ${symbol} in 2 seconds...`);
-          setTimeout(() => fetchData(1), 2000);
-          return;
-        }
-        
+        console.error(`Error fetching data for ${symbol}:`, err);
         setError(err.message);
         if (onError) onError(symbol, err.message);
       } finally {
@@ -169,7 +157,7 @@ const TickerCard = ({ symbol, onError, delay = 0 }) => {
     };
 
     fetchData();
-  }, [symbol, onError, delay]);
+  }, [symbol, onError]);
 
   const handleClick = () => {
     navigate(`/stock/${symbol}`);

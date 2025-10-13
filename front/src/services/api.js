@@ -194,6 +194,44 @@ export const getTimeSeries = async (symbol, range = '1M') => {
   return await r.json();
 };
 
+// Direct yfinance API for ticker cards (bypasses backend rate limits)
+export const getYFinanceData = async (symbol) => {
+  try {
+    // Use a free yfinance API service
+    const response = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=5d&interval=1d`);
+    if (!response.ok) throw new Error('Failed to fetch from Yahoo Finance');
+    
+    const data = await response.json();
+    
+    if (!data.chart || !data.chart.result || !data.chart.result[0]) {
+      throw new Error('No data available from Yahoo Finance');
+    }
+    
+    const result = data.chart.result[0];
+    const timestamps = result.timestamp;
+    const closes = result.indicators.quote[0].close;
+    
+    if (!timestamps || !closes || timestamps.length === 0) {
+      throw new Error('Insufficient data points');
+    }
+    
+    // Convert to our expected format
+    const points = timestamps.map((timestamp, index) => ({
+      timestamp: new Date(timestamp * 1000).toISOString(),
+      close: closes[index] || 0
+    })).filter(point => point.close > 0);
+    
+    return {
+      series: {
+        points: points
+      }
+    };
+  } catch (error) {
+    console.error(`Yahoo Finance API error for ${symbol}:`, error);
+    throw error;
+  }
+};
+
 export const getOverview = async (symbol) => {
   const r = await fetch(`${BASE_URL}/overview/${symbol}`);
   if (!r.ok) throw new Error('failed to fetch overview');
