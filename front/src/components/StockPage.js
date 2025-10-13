@@ -7,6 +7,8 @@ import styled from 'styled-components';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'; //A library for building charts in react
 import { getStockData, getPredictions, saveLastPredictions } from '../services/api'; //Functions ipported from an API service module to fetch stock data and predictions
 import ProgressBar from './ProgressBar';
+import NavBar from './NavBar';
+import Footer from './Footer';
 
 const Container = styled.div`
   max-width: 1200px;
@@ -240,34 +242,50 @@ const StockPage = () => { //Defines StockPage as a functional react component
 
   if (loading) {
     return (
-      <Container>
-        <Header>
-          <StockInfo>
-            <StockSymbol>{symbol}</StockSymbol>
-          </StockInfo>
-        </Header>
-        
-        <LoadingContainer>
-          <LoadingTitle>Loading Stock Data & Predictions</LoadingTitle>
-          <ProgressContainer>
-            <ProgressBar 
-              progress={dataLoadingProgress}
-              label="Fetching Market Data"
-              timeRemaining={Math.ceil((100 - dataLoadingProgress) / 50)}
-            />
-            <ProgressBar 
-              progress={predictionProgress}
-              label="Calculating Predictions"
-              timeRemaining={Math.ceil((100 - predictionProgress) / 20)}
-            />
-          </ProgressContainer>
-        </LoadingContainer>
-      </Container>
+      <>
+        <NavBar />
+        <Container>
+          <Header>
+            <StockInfo>
+              <StockSymbol>{symbol}</StockSymbol>
+            </StockInfo>
+          </Header>
+          
+          <LoadingContainer>
+            <LoadingTitle>Loading Stock Data & Predictions</LoadingTitle>
+            <ProgressContainer>
+              <ProgressBar 
+                progress={dataLoadingProgress}
+                label="Fetching Market Data"
+                timeRemaining={Math.ceil((100 - dataLoadingProgress) / 50)}
+              />
+              <ProgressBar 
+                progress={predictionProgress}
+                label="Calculating Predictions"
+                timeRemaining={Math.ceil((100 - predictionProgress) / 20)}
+              />
+            </ProgressContainer>
+          </LoadingContainer>
+        </Container>
+        <Footer />
+      </>
     );
   }
   
-  if (error) return <Container>{error}</Container>;
-  if (!stockData || !predictions) return <Container>No data available</Container>;
+  if (error) return (
+    <>
+      <NavBar />
+      <Container>{error}</Container>
+      <Footer />
+    </>
+  );
+  if (!stockData || !predictions) return (
+    <>
+      <NavBar />
+      <Container>No data available</Container>
+      <Footer />
+    </>
+  );
 
   const currentModel = models[modelId];
   const priceChange = stockData.price - stockData.previousClose;
@@ -275,7 +293,9 @@ const StockPage = () => { //Defines StockPage as a functional react component
   const isPositive = priceChange >= 0;
 
   return (
-    <Container>
+    <>
+      <NavBar />
+      <Container>
         <Header>
           <StockInfo>
             <StockSymbol>{symbol}</StockSymbol>
@@ -287,7 +307,7 @@ const StockPage = () => { //Defines StockPage as a functional react component
             </StockPrice>
           </StockInfo>
           <BackButton onClick={() => {
-            navigate('/predict');
+            navigate('/predict', { replace: false });
           }}>Return to Predict</BackButton>
         </Header>
 
@@ -341,7 +361,9 @@ const StockPage = () => { //Defines StockPage as a functional react component
           </Metric>
         </MetricsGrid>
       </ModelInfo>
-    </Container>
+      </Container>
+      <Footer />
+    </>
   );
 };
 

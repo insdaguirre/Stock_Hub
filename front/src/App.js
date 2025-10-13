@@ -10,6 +10,7 @@ import RegisterPage from './components/RegisterPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import NavBar from './components/NavBar';
 import Footer from './components/Footer';
+import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider } from './contexts/AuthContext';
 import './App.css';
 import 'react-toastify/dist/ReactToastify.css';
@@ -25,39 +26,45 @@ const PageLayout = ({ children }) => (
 
 function App() {
   return (
-    <Router>
-      <AuthProvider>
-        <Routes>
-          <Route path="/" element={
-            <PageLayout>
-              <LandingPage />
-            </PageLayout>
-          } />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/predict" element={
-            <ProtectedRoute>
+    <ErrorBoundary>
+      <Router>
+        <AuthProvider>
+          <Routes>
+            <Route path="/" element={
               <PageLayout>
-                <PredictPage />
+                <LandingPage />
               </PageLayout>
-            </ProtectedRoute>
-          } />
-          <Route path="/dev" element={
-            <PageLayout>
-              <DevPage />
-            </PageLayout>
-          } />
-          <Route path="/stock/:symbol" element={
-            <ProtectedRoute>
+            } />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/predict" element={
+              <ProtectedRoute>
+                <PageLayout>
+                  <PredictPage />
+                </PageLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/dev" element={
               <PageLayout>
+                <DevPage />
+              </PageLayout>
+            } />
+            <Route path="/stock/:symbol" element={
+              <ProtectedRoute>
                 <StockPage />
+              </ProtectedRoute>
+            } />
+            {/* Fallback route for any unmatched paths */}
+            <Route path="*" element={
+              <PageLayout>
+                <LandingPage />
               </PageLayout>
-            </ProtectedRoute>
-          } />
-        </Routes>
-        <ToastContainer />
-      </AuthProvider>
-    </Router>
+            } />
+          </Routes>
+          <ToastContainer />
+        </AuthProvider>
+      </Router>
+    </ErrorBoundary>
   );
 }
 

@@ -302,7 +302,7 @@ const LandingPage = () => {
               personalized insights, and advanced market analysis tools.
             </CTADescription>
             <CTAButton onClick={() => window.location.href = '#/register'}>
-              Get Started Free
+              for free
             </CTAButton>
           </CTASection>
 

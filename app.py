@@ -1172,6 +1172,17 @@ def fetch_overview(symbol: str):
     Prefers Finnhub metrics + quote; falls back to Alpha Vantage OVERVIEW + GLOBAL_QUOTE.
     Returns dictionary with common fields.
     """
+    t0 = time.perf_counter()
+    cache_key = f"overview:{symbol.upper()}"
+    cached = _cache_get(cache_key)
+    if cached:
+        try:
+            payload = json.loads(cached)
+            print(json.dumps({"route": "overview", "symbol": symbol, "cache_hit": True, "latency_ms": int((time.perf_counter()-t0)*1000)}))
+            return payload
+        except Exception:
+            pass
+    
     # Finnhub path
     if FINNHUB_API_KEY:
         try:
@@ -1204,6 +1215,9 @@ def fetch_overview(symbol: str):
             "currency": prof.get('currency') or 'USD'
         }
         if any(v is not None for v in result.values()):
+            # Cache for 1 hour (overview data changes less frequently)
+            _cache_set(cache_key, json.dumps(result), ttl_seconds=3600)
+            print(json.dumps({"route": "overview", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000), "source": "finnhub"}))
             return result
     # Alpha Vantage fallback
     ov = {}
@@ -1212,7 +1226,7 @@ def fetch_overview(symbol: str):
     except Exception:
         ov = {}
     price, prev_close = fetch_global_quote(symbol)
-    return {
+    result = {
         "marketCap": _format_number(ov.get('MarketCapitalization')),
         "pe": _format_number(ov.get('PERatio')),
         "eps": _format_number(ov.get('EPS')),
@@ -1228,6 +1242,10 @@ def fetch_overview(symbol: str):
         "name": ov.get('Name') or symbol.upper(),
         "currency": ov.get('Currency') or 'USD'
     }
+    # Cache for 1 hour (overview data changes less frequently)
+    _cache_set(cache_key, json.dumps(result), ttl_seconds=3600)
+    print(json.dumps({"route": "overview", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000), "source": "alphavantage"}))
+    return result
 
 
 @app.get("/api/overview/{symbol}")

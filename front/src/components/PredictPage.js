@@ -341,6 +341,7 @@ const PredictPage = () => {
   const [series, setSeries] = useState(null);
   const [overview, setOverview] = useState(null);
   const [lastFullDate, setLastFullDate] = useState(null);
+  const [dataLoading, setDataLoading] = useState(true);
   const seriesCacheRef = useRef({});
 
   // Models data
@@ -522,6 +523,7 @@ const PredictPage = () => {
   // Load intraday + overview + default 1D series
   useEffect(() => {
     let mounted = true;
+    setDataLoading(true);
     const load = async () => {
       let intrResp = null;
       try {
@@ -596,6 +598,10 @@ const PredictPage = () => {
       } catch (_) {}
       
       setSeries({ points: pts || [] });
+      
+      if (mounted) {
+        setDataLoading(false);
+      }
       
       ['1W','1M','3M'].forEach(async (r) => {
         try {
@@ -674,7 +680,18 @@ const PredictPage = () => {
         </Header>
 
         {/* Intraday Chart Section */}
-        {intraday && (
+        {dataLoading ? (
+          <LoadingContainer>
+            <LoadingTitle>Loading Market Data</LoadingTitle>
+            <ProgressContainer>
+              <ProgressBar 
+                progress={50}
+                label="Fetching intraday data"
+                timeRemaining={2}
+              />
+            </ProgressContainer>
+          </LoadingContainer>
+        ) : intraday && (
           <IntradayCard>
             <ChartHeader>
               <ChartTitle>Intraday • {selectedSymbol}</ChartTitle>
