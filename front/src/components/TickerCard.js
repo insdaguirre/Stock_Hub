@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis } from 'recharts';
 import { FaArrowUp, FaArrowDown, FaExternalLinkAlt } from 'react-icons/fa';
-import { getYFinanceData } from '../services/api';
+import { getTickerData } from '../services/api';
 import { requestQueue } from '../utils/requestQueue';
 
 const CardContainer = styled.div`
@@ -130,7 +130,7 @@ const TickerCard = ({ symbol, onError }) => {
         setError(null);
         
         // Use request queue to manage concurrent requests
-        const response = await requestQueue.add(() => getYFinanceData(symbol));
+        const response = await requestQueue.add(() => getTickerData(symbol));
         
         if (response && response.series && response.series.points && response.series.points.length >= 2) {
           const points = response.series.points.slice(-5); // Last 5 days
