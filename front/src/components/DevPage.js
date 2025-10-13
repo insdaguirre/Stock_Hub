@@ -1,7 +1,7 @@
 // src/components/DevPage.js
 import React from 'react';
 import styled from 'styled-components';
-import { FaGithub, FaCode, FaDatabase, FaServer, FaCloud, FaChartLine, FaCog, FaArrowRight } from 'react-icons/fa';
+import { FaGithub, FaDatabase, FaServer, FaCloud, FaChartLine, FaCog, FaArrowRight } from 'react-icons/fa';
 
 const PageContainer = styled.div`
   min-height: 100vh;
@@ -144,34 +144,93 @@ const TechTag = styled.span`
   border: 1px solid rgba(0, 212, 170, 0.3);
 `;
 
-const DiagramContainer = styled.div`
+
+const ArchitectureFlow = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin: 2rem 0;
+`;
+
+const FlowStep = styled.div`
   background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
   border: 1px solid #333;
-  border-radius: 12px;
-  padding: 2rem;
-  margin: 2rem 0;
-  overflow-x: auto;
-`;
-
-const DiagramTitle = styled.h3`
-  font-size: 18px;
-  font-weight: 600;
-  color: #ffffff;
-  margin: 0 0 1rem 0;
-  text-align: center;
-`;
-
-const MermaidDiagram = styled.div`
-  text-align: center;
-  color: #b0b0b0;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 14px;
-  line-height: 1.6;
-  white-space: pre-line;
-  background: #0a0a0a;
-  padding: 1.5rem;
   border-radius: 8px;
+  padding: 1.5rem;
+  text-align: center;
+  position: relative;
+  
+  &::after {
+    content: '→';
+    position: absolute;
+    right: -20px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #00d4aa;
+    font-size: 20px;
+    font-weight: bold;
+  }
+  
+  &:last-child::after {
+    display: none;
+  }
+`;
+
+const FlowTitle = styled.h4`
+  color: #00d4aa;
+  margin: 0 0 0.5rem 0;
+  font-size: 16px;
+  font-weight: 600;
+`;
+
+const FlowDescription = styled.p`
+  color: #b0b0b0;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+`;
+
+const DataFlowList = styled.div`
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
   border: 1px solid #333;
+  border-radius: 8px;
+  padding: 2rem;
+  margin: 1rem 0;
+`;
+
+const FlowItem = styled.div`
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: rgba(0, 212, 170, 0.05);
+  border-radius: 6px;
+  border-left: 3px solid #00d4aa;
+  
+  &:last-child {
+    margin-bottom: 0;
+  }
+`;
+
+const FlowNumber = styled.div`
+  background: #00d4aa;
+  color: #000;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 12px;
+  margin-right: 1rem;
+  flex-shrink: 0;
+`;
+
+const FlowText = styled.div`
+  color: #e0e0e0;
+  font-size: 14px;
+  line-height: 1.4;
 `;
 
 const FeatureList = styled.div`
@@ -194,36 +253,6 @@ const FeatureIcon = styled.div`
   font-size: 12px;
 `;
 
-const CodeBlock = styled.div`
-  background: #0a0a0a;
-  border: 1px solid #333;
-  border-radius: 8px;
-  padding: 1.5rem;
-  margin: 1rem 0;
-  overflow-x: auto;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 14px;
-  line-height: 1.6;
-`;
-
-const CodeLine = styled.div`
-  color: #b0b0b0;
-  margin: 4px 0;
-`;
-
-const Keyword = styled.span`
-  color: #00d4aa;
-  font-weight: 600;
-`;
-
-const String = styled.span`
-  color: #ffd700;
-`;
-
-const Comment = styled.span`
-  color: #666;
-  font-style: italic;
-`;
 
 const DevPage = () => {
   return (
@@ -247,7 +276,7 @@ const DevPage = () => {
 
         <Section>
           <SectionTitle>
-            <IconWrapper><FaCode /></IconWrapper>
+            <IconWrapper><FaServer /></IconWrapper>
             Technology Stack
           </SectionTitle>
           
@@ -327,72 +356,70 @@ const DevPage = () => {
             System Architecture
           </SectionTitle>
           
-          <DiagramContainer>
-            <DiagramTitle>Data Pipeline Architecture</DiagramTitle>
-            <MermaidDiagram>
-{`┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Data Sources  │    │   API Gateway   │    │   ML Pipeline   │
-│                 │    │                 │    │                 │
-│ • Alpha Vantage │───▶│   FastAPI       │───▶│ • LSTM          │
-│ • Finnhub       │    │   + Redis       │    │ • Random Forest │
-│ • Yahoo Finance │    │   + RQ Workers  │    │ • Prophet       │
-└─────────────────┘    └─────────────────┘    │ • XGBoost       │
-                                              │ • ARIMA         │
-┌─────────────────┐    ┌─────────────────┐    └─────────────────┘
-│   Frontend      │    │   Caching       │              │
-│                 │    │                 │              ▼
-│ • React App     │◀───│ • Redis Cache   │    ┌─────────────────┐
-│ • Real-time UI  │    │ • LocalStorage  │    │   Predictions   │
-│ • Charts        │    │ • TTL Management│    │                 │
-└─────────────────┘    └─────────────────┘    │ • Multi-timeframe│
-                                              │ • Model Accuracy │
-                                              │ • Historical Data│
-                                              └─────────────────┘`}
-            </MermaidDiagram>
-          </DiagramContainer>
+          <ArchitectureFlow>
+            <FlowStep>
+              <FlowTitle>Data Sources</FlowTitle>
+              <FlowDescription>
+                Alpha Vantage, Finnhub, and Yahoo Finance APIs provide real-time market data
+              </FlowDescription>
+            </FlowStep>
+            <FlowStep>
+              <FlowTitle>API Gateway</FlowTitle>
+              <FlowDescription>
+                FastAPI backend with Redis caching and RQ workers for background processing
+              </FlowDescription>
+            </FlowStep>
+            <FlowStep>
+              <FlowTitle>ML Pipeline</FlowTitle>
+              <FlowDescription>
+                LSTM, Random Forest, Prophet, XGBoost, and ARIMA models for predictions
+              </FlowDescription>
+            </FlowStep>
+            <FlowStep>
+              <FlowTitle>Frontend</FlowTitle>
+              <FlowDescription>
+                React app with real-time charts and professional finance UI
+              </FlowDescription>
+            </FlowStep>
+          </ArchitectureFlow>
         </Section>
 
         <Section>
           <SectionTitle>
             <IconWrapper><FaDatabase /></IconWrapper>
-            Data Flow Diagram
+            Data Processing Flow
           </SectionTitle>
           
-          <DiagramContainer>
-            <DiagramTitle>Real-time Data Processing Flow</DiagramTitle>
-            <MermaidDiagram>
-{`1. User Request
-   │
-   ▼
-2. Check Cache (Redis)
-   │
-   ▼ (Cache Miss)
-3. Fetch from APIs
-   │
-   ├─ Alpha Vantage (Primary)
-   ├─ Finnhub (Secondary)
-   └─ Yahoo Finance (Fallback)
-   │
-   ▼
-4. Process & Validate Data
-   │
-   ├─ Normalize timestamps
-   ├─ Filter market hours
-   └─ Calculate indicators
-   │
-   ▼
-5. Store in Cache
-   │
-   ├─ Redis (Server-side)
-   └─ localStorage (Client-side)
-   │
-   ▼
-6. Return to Frontend
-   │
-   ▼
-7. Render Charts & Predictions`}
-            </MermaidDiagram>
-          </DiagramContainer>
+          <DataFlowList>
+            <FlowItem>
+              <FlowNumber>1</FlowNumber>
+              <FlowText>User makes a request through the React frontend</FlowText>
+            </FlowItem>
+            <FlowItem>
+              <FlowNumber>2</FlowNumber>
+              <FlowText>System checks Redis cache for existing data</FlowText>
+            </FlowItem>
+            <FlowItem>
+              <FlowNumber>3</FlowNumber>
+              <FlowText>If cache miss, fetch from external APIs (Alpha Vantage, Finnhub, Yahoo Finance)</FlowText>
+            </FlowItem>
+            <FlowItem>
+              <FlowNumber>4</FlowNumber>
+              <FlowText>Process and validate data (normalize timestamps, filter market hours, calculate indicators)</FlowText>
+            </FlowItem>
+            <FlowItem>
+              <FlowNumber>5</FlowNumber>
+              <FlowText>Store processed data in Redis (server-side) and localStorage (client-side)</FlowText>
+            </FlowItem>
+            <FlowItem>
+              <FlowNumber>6</FlowNumber>
+              <FlowText>Return processed data to the frontend</FlowText>
+            </FlowItem>
+            <FlowItem>
+              <FlowNumber>7</FlowNumber>
+              <FlowText>Render interactive charts and predictions for the user</FlowText>
+            </FlowItem>
+          </DataFlowList>
         </Section>
 
         <Section>
@@ -470,34 +497,6 @@ const DevPage = () => {
           </ArchitectureGrid>
         </Section>
 
-        <Section>
-          <SectionTitle>
-            <IconWrapper><FaCode /></IconWrapper>
-            Code Example
-          </SectionTitle>
-          
-          <CodeBlock>
-            <CodeLine><Comment># FastAPI endpoint for predictions</Comment></CodeLine>
-            <CodeLine><Keyword>@app.post</Keyword>(<String>"/predictions/{'{symbol}'}"</String>)</CodeLine>
-            <CodeLine><Keyword>async def</Keyword> get_predictions(symbol: <Keyword>str</Keyword>):</CodeLine>
-            <CodeLine>    <Comment># Check cache first</Comment></CodeLine>
-            <CodeLine>    cached = <Keyword>await</Keyword> redis.get(<String>f"pred:{'{symbol}'}"</String>)</CodeLine>
-            <CodeLine>    <Keyword>if</Keyword> cached:</CodeLine>
-            <CodeLine>        <Keyword>return</Keyword> json.loads(cached)</CodeLine>
-            <CodeLine>    </CodeLine>
-            <CodeLine>    <Comment># Generate predictions</Comment></CodeLine>
-            <CodeLine>    predictions = <Keyword>await</Keyword> generate_predictions(symbol)</CodeLine>
-            <CodeLine>    </CodeLine>
-            <CodeLine>    <Comment># Cache results</Comment></CodeLine>
-            <CodeLine>    <Keyword>await</Keyword> redis.setex(</CodeLine>
-            <CodeLine>        <String>f"pred:{'{symbol}'}"</String>,</CodeLine>
-            <CodeLine>        <Keyword>3600</Keyword>,  <Comment># 1 hour TTL</Comment></CodeLine>
-            <CodeLine>        json.dumps(predictions)</CodeLine>
-            <CodeLine>    )</CodeLine>
-            <CodeLine>    </CodeLine>
-            <CodeLine>    <Keyword>return</Keyword> predictions</CodeLine>
-          </CodeBlock>
-        </Section>
       </MainContent>
     </PageContainer>
   );

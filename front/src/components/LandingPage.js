@@ -38,13 +38,6 @@ const Title = styled.h1`
   letter-spacing: -1px;
 `;
 
-const Subtitle = styled.p`
-  font-size: clamp(16px, 2vw, 20px);
-  color: #b0b0b0;
-  margin: 0 0 2rem 0;
-  font-weight: 300;
-  line-height: 1.5;
-`;
 
 
 const SectionTitle = styled.h2`
@@ -186,9 +179,6 @@ const LandingPage = () => {
       <MainContent>
         <Header>
           <Title>StockHub</Title>
-          <Subtitle>
-            Professional-grade stock analysis and prediction platform
-          </Subtitle>
         </Header>
 
         <SectionTitle>Latest Financial News</SectionTitle>
