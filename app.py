@@ -87,15 +87,8 @@ class CorsOverrideMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(CorsOverrideMiddleware)
 
-# CORS configuration (backup)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_origin_regex=r"https://.*\\.github\\.io$",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# NOTE: Built-in CORSMiddleware is DISABLED because it conflicts with our custom override
+# The custom middleware above handles all CORS for *.github.io origins
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
