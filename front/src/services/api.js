@@ -171,15 +171,6 @@ export const getApiStatus = async () => {
   }
 };
 
-// Fetch latest news, optional symbol filter; backend caches for 12h
-export const getNews = async (symbol, limit = 6) => {
-  const url = symbol ? `${BASE_URL}/news?symbol=${encodeURIComponent(symbol)}` : `${BASE_URL}/news`;
-  const r = await fetch(url);
-  if (!r.ok) throw new Error('failed to fetch news');
-  const js = await r.json();
-  const articles = (js.articles || []).slice(0, limit);
-  return articles;
-};
 
 // Intraday chart data
 export const getIntraday = async (symbol) => {
@@ -197,12 +188,16 @@ export const getTimeSeries = async (symbol, range = '1M') => {
 // Backend API for ticker cards with proper error handling
 export const getTickerData = async (symbol) => {
   try {
-    const response = await fetch(`${BASE_URL}/timeseries/${symbol}?range=5d`);
+    console.log(`Fetching data for ${symbol} from backend API...`);
+    const response = await fetch(`${BASE_URL}/timeseries/${symbol}?range=5d&v=${Date.now()}`);
+    console.log(`Response status for ${symbol}:`, response.status);
+    
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
     
     const data = await response.json();
+    console.log(`Data received for ${symbol}:`, data.points?.length, 'points');
     
     if (!data.points || data.points.length < 2) {
       throw new Error('Insufficient data points');
@@ -214,6 +209,8 @@ export const getTickerData = async (symbol) => {
       close: parseFloat(point.price)
     }));
     
+    console.log(`Processed ${symbol}:`, points.length, 'points');
+    
     return {
       series: {
         points: points
@@ -221,6 +218,22 @@ export const getTickerData = async (symbol) => {
     };
   } catch (error) {
     console.error(`Backend API error for ${symbol}:`, error);
+    throw error;
+  }
+};
+
+// News API function
+export const getNews = async (limit = 3) => {
+  try {
+    const response = await fetch(`${BASE_URL}/news?limit=${limit}`);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return data.articles || [];
+  } catch (error) {
+    console.error('Error fetching news:', error);
     throw error;
   }
 };

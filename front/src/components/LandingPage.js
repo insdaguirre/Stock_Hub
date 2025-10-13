@@ -1,8 +1,10 @@
 // src/components/LandingPage.js
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { FaChartLine, FaArrowUp, FaDollarSign } from 'react-icons/fa';
+import { FaChartLine } from 'react-icons/fa';
 import TickerCard from './TickerCard';
+import NewsCard from './NewsCard';
+import { getNews } from '../services/api';
 
 const PageContainer = styled.div`
   min-height: 100vh;
@@ -44,46 +46,6 @@ const Subtitle = styled.p`
   line-height: 1.5;
 `;
 
-const StatsContainer = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 3rem;
-`;
-
-const StatCard = styled.div`
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  border: 1px solid #333;
-  border-radius: 12px;
-  padding: 1.5rem;
-  text-align: center;
-  transition: all 0.3s ease;
-  
-  &:hover {
-    transform: translateY(-2px);
-    border-color: #00d4aa;
-    box-shadow: 0 8px 25px rgba(0, 212, 170, 0.1);
-  }
-`;
-
-const StatIcon = styled.div`
-  color: #00d4aa;
-  font-size: 24px;
-  margin-bottom: 0.5rem;
-`;
-
-const StatValue = styled.div`
-  font-size: 24px;
-  font-weight: 700;
-  color: #ffffff;
-  margin-bottom: 0.25rem;
-`;
-
-const StatLabel = styled.div`
-  font-size: 14px;
-  color: #b0b0b0;
-  font-weight: 500;
-`;
 
 const SectionTitle = styled.h2`
   font-size: 28px;
@@ -111,6 +73,13 @@ const TickerGrid = styled.div`
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 1.5rem;
   margin-bottom: 3rem;
+`;
+
+const NewsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 2rem;
+  margin: 2rem 0;
 `;
 
 const ErrorMessage = styled.div`
@@ -169,6 +138,8 @@ const LandingPage = () => {
   ]);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(true);
+  const [news, setNews] = useState([]);
+  const [newsLoading, setNewsLoading] = useState(true);
 
   const handleTickerError = (symbol, error) => {
     setErrors(prev => ({ ...prev, [symbol]: error }));
@@ -181,6 +152,30 @@ const LandingPage = () => {
     }, 1000);
 
     return () => clearTimeout(timer);
+  }, []);
+
+  // Fetch news articles
+  useEffect(() => {
+    const fetchNews = async () => {
+      try {
+        console.log('Fetching news articles...');
+        setNewsLoading(true);
+        const articles = await getNews(3);
+        console.log('News articles received:', articles);
+        setNews(articles);
+      } catch (error) {
+        console.error('Error fetching news:', error);
+      } finally {
+        setNewsLoading(false);
+      }
+    };
+
+    fetchNews();
+    
+    // Refresh news every hour
+    const interval = setInterval(fetchNews, 60 * 60 * 1000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   const errorCount = Object.keys(errors).length;
@@ -196,23 +191,19 @@ const LandingPage = () => {
           </Subtitle>
         </Header>
 
-        <StatsContainer>
-          <StatCard>
-            <StatIcon><FaChartLine /></StatIcon>
-            <StatValue>12</StatValue>
-            <StatLabel>Tracked Stocks</StatLabel>
-          </StatCard>
-          <StatCard>
-            <StatIcon><FaArrowUp /></StatIcon>
-            <StatValue>8</StatValue>
-            <StatLabel>ML Models</StatLabel>
-          </StatCard>
-          <StatCard>
-            <StatIcon><FaDollarSign /></StatIcon>
-            <StatValue>Real-time</StatValue>
-            <StatLabel>Market Data</StatLabel>
-          </StatCard>
-        </StatsContainer>
+        <SectionTitle>Latest Financial News</SectionTitle>
+        
+        {newsLoading ? (
+          <LoadingContainer>
+            Loading latest news...
+          </LoadingContainer>
+        ) : (
+          <NewsGrid>
+            {news.map((article, index) => (
+              <NewsCard key={article.id || index} article={article} />
+            ))}
+          </NewsGrid>
+        )}
 
         <SectionTitle>Market Overview</SectionTitle>
 
