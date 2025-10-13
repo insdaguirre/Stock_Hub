@@ -25,8 +25,8 @@ const PageLayout = ({ children }) => (
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
+    <Router>
+      <AuthProvider>
         <Routes>
           <Route path="/" element={
             <PageLayout>
@@ -50,8 +50,8 @@ function App() {
           <Route path="/stock/:symbol" element={<StockPage />} />
         </Routes>
         <ToastContainer />
-      </Router>
-    </AuthProvider>
+      </AuthProvider>
+    </Router>
   );
 }
 
