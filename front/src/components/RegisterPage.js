@@ -110,15 +110,15 @@ const ErrorMessage = styled.div`
   text-align: center;
 `;
 
-const SuccessMessage = styled.div`
-  background: linear-gradient(135deg, #1b2d1b 0%, #2a3d2a 100%);
-  border: 1px solid ${colors.bullGreen};
-  border-radius: 6px;
-  padding: 12px;
-  color: ${colors.bullGreen};
-  font-size: 14px;
-  text-align: center;
-`;
+// const SuccessMessage = styled.div`
+//   background: linear-gradient(135deg, #1b2d1b 0%, #2a3d2a 100%);
+//   border: 1px solid ${colors.bullGreen};
+//   border-radius: 6px;
+//   padding: 12px;
+//   color: ${colors.bullGreen};
+//   font-size: 14px;
+//   text-align: center;
+// `;
 
 const LinkText = styled.p`
   text-align: center;

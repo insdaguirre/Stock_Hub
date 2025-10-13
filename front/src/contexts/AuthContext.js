@@ -109,8 +109,6 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (response.ok) {
-        const userData = await response.json();
-        
         // Auto-login after successful registration
         const loginResult = await login(username, password);
         if (loginResult.success) {
