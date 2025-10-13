@@ -4,6 +4,7 @@ import styled from 'styled-components';
 import { FaChartLine } from 'react-icons/fa';
 import TickerCard from './TickerCard';
 import NewsCard from './NewsCard';
+import FinanceBackground from './FinanceBackground';
 import { getNews } from '../services/api';
 import { TickerDataProvider, useTickerData } from '../contexts/TickerDataContext';
 import colors from '../styles/colors';
@@ -14,6 +15,8 @@ const PageContainer = styled.div`
   color: ${colors.textPrimary};
   display: flex;
   flex-direction: column;
+  position: relative;
+  overflow-x: hidden;
 `;
 
 const MainContent = styled.div`
@@ -22,6 +25,8 @@ const MainContent = styled.div`
   margin: 0 auto;
   padding: 2rem;
   width: 100%;
+  position: relative;
+  z-index: 1;
 `;
 
 const Header = styled.div`
@@ -284,6 +289,7 @@ const LandingPage = () => {
   return (
     <TickerDataProvider>
       <PageContainer>
+        <FinanceBackground />
         <MainContent>
           <Header>
             <Title>StockHub</Title>
