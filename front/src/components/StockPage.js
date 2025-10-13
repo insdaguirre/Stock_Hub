@@ -7,8 +7,6 @@ import styled from 'styled-components';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'; //A library for building charts in react
 import { getStockData, getPredictions, saveLastPredictions } from '../services/api'; //Functions ipported from an API service module to fetch stock data and predictions
 import ProgressBar from './ProgressBar';
-import NavBar from './NavBar';
-import Footer from './Footer';
 
 const Container = styled.div`
   max-width: 1200px;
@@ -277,9 +275,7 @@ const StockPage = () => { //Defines StockPage as a functional react component
   const isPositive = priceChange >= 0;
 
   return (
-    <>
-      <NavBar />
-      <Container>
+    <Container>
         <Header>
           <StockInfo>
             <StockSymbol>{symbol}</StockSymbol>
@@ -291,11 +287,8 @@ const StockPage = () => { //Defines StockPage as a functional react component
             </StockPrice>
           </StockInfo>
           <BackButton onClick={() => {
-            try {
-              const base = process.env.PUBLIC_URL || '/Stock_Hub';
-              window.location.assign(base.endsWith('/') ? base : base + '/');
-            } catch (_) { navigate('/'); }
-          }}>Return to Hub</BackButton>
+            navigate('/predict');
+          }}>Return to Predict</BackButton>
         </Header>
 
       <ChartContainer>
@@ -348,9 +341,7 @@ const StockPage = () => { //Defines StockPage as a functional react component
           </Metric>
         </MetricsGrid>
       </ModelInfo>
-      </Container>
-      <Footer />
-    </>
+    </Container>
   );
 };
 
