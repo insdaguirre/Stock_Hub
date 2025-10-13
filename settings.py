@@ -16,4 +16,12 @@ CORS_ORIGINS = [origin_local, origin_prod]
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 PORT = int(os.getenv('PORT', 8000))
 HOST = os.getenv('HOST', '0.0.0.0')
-WORKERS = int(os.getenv('WORKERS', 6)) 
+WORKERS = int(os.getenv('WORKERS', 6))
+
+# Database settings
+DATABASE_URL = os.getenv('DATABASE_URL')
+
+# JWT settings
+JWT_SECRET = os.getenv('JWT_SECRET', 'your-secret-key-change-this-in-production')
+JWT_ALGORITHM = os.getenv('JWT_ALGORITHM', 'HS256')
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv('ACCESS_TOKEN_EXPIRE_MINUTES', '1440'))  # 24 hours 
