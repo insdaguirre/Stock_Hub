@@ -322,9 +322,6 @@ const LandingPage = () => {
           <MarketOverview />
 
           <CTA>
-            <CTAText>
-              Ready to make informed investment decisions?
-            </CTAText>
             <CTALink href="#/predict">
               <FaChartLine />
               Start Predicting
