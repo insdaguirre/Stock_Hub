@@ -13,6 +13,45 @@ const inferProdBase = () => {
 };
 export const BASE_URL = process.env.REACT_APP_API_BASE_URL || inferProdBase();
 
+// Helper function to get auth headers
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('stockhub_token');
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  return headers;
+};
+
+// Helper function to handle 401 responses
+const handleUnauthorized = () => {
+  localStorage.removeItem('stockhub_token');
+  // Redirect to login page
+  window.location.href = '/#/login';
+};
+
+// Helper function to make authenticated requests
+const makeRequest = async (url, options = {}) => {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      ...getAuthHeaders(),
+      ...options.headers,
+    },
+  });
+
+  if (response.status === 401) {
+    handleUnauthorized();
+    throw new Error('Unauthorized');
+  }
+
+  return response;
+};
+
 // Persist last predictions summary for hydration after navigation
 export const saveLastPredictions = (symbol, payload) => {
   try { localStorage.setItem(`sh:lastPred:${symbol}`, JSON.stringify(payload)); } catch (_) {}
@@ -26,7 +65,7 @@ export const loadLastPredictions = (symbol) => {
 // Main prediction function that combines all models
 export const getPredictions = async (symbol) => {
   try {
-    const response = await fetch(`${BASE_URL}/predictions/${symbol}`);
+    const response = await makeRequest(`${BASE_URL}/predictions/${symbol}`);
     let data;
     if (response.status === 202) {
       const { job_id } = await response.json();
@@ -128,7 +167,7 @@ export const getPredictions = async (symbol) => {
 const pollJob = async (jobId, timeoutMs = 20000, intervalMs = 1000) => {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    const r = await fetch(`${BASE_URL}/jobs/${jobId}`);
+    const r = await makeRequest(`${BASE_URL}/jobs/${jobId}`);
     if (!r.ok) {
       throw new Error('Failed to poll job');
     }

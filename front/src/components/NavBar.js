@@ -2,7 +2,8 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import styled from 'styled-components';
-import { FaChartLine, FaCode, FaHome } from 'react-icons/fa';
+import { FaChartLine, FaCode, FaHome, FaUser, FaSignOutAlt } from 'react-icons/fa';
+import { useAuth } from '../contexts/AuthContext';
 import colors from '../styles/colors';
 
 const NavContainer = styled.nav`
@@ -91,14 +92,63 @@ const IconWrapper = styled.div`
   font-size: 16px;
 `;
 
+const UserSection = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+`;
+
+const UserInfo = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: ${colors.textSecondary};
+  font-size: 14px;
+`;
+
+const AuthButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 500;
+  font-size: 14px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: ${colors.textSecondary};
+  
+  &:hover {
+    color: ${colors.bullGreen};
+    background: ${colors.hover};
+    transform: translateY(-1px);
+  }
+`;
+
+const LogoutButton = styled(AuthButton)`
+  color: ${colors.bearRed};
+  
+  &:hover {
+    color: ${colors.bearRed};
+    background: rgba(255, 99, 99, 0.1);
+  }
+`;
+
 const NavBar = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, isAuthenticated, logout } = useAuth();
 
   const isActive = (path) => {
     if (path === '/' && location.pathname === '/') return true;
     if (path !== '/' && location.pathname.startsWith(path)) return true;
     return false;
+  };
+
+  const handleLogout = () => {
+    logout();
   };
 
   return (
@@ -131,6 +181,31 @@ const NavBar = () => {
             <IconWrapper><FaCode /></IconWrapper>
             Dev
           </NavLink>
+          
+          <UserSection>
+            {isAuthenticated() ? (
+              <>
+                <UserInfo>
+                  <IconWrapper><FaUser /></IconWrapper>
+                  {user?.username}
+                </UserInfo>
+                <LogoutButton onClick={handleLogout}>
+                  <IconWrapper><FaSignOutAlt /></IconWrapper>
+                  Logout
+                </LogoutButton>
+              </>
+            ) : (
+              <>
+                <AuthButton onClick={() => navigate('/login')}>
+                  <IconWrapper><FaUser /></IconWrapper>
+                  Login
+                </AuthButton>
+                <AuthButton onClick={() => navigate('/register')}>
+                  Sign Up
+                </AuthButton>
+              </>
+            )}
+          </UserSection>
         </NavLinks>
       </NavContent>
     </NavContainer>
