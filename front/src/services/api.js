@@ -277,6 +277,32 @@ export const getTickerData = async (symbol) => {
   }
 };
 
+// Batch API for multiple tickers with caching
+export const getTickersBatch = async (symbols) => {
+  try {
+    console.log(`Fetching batch data for ${symbols.length} symbols...`);
+    const symbolsParam = symbols.join(',');
+    const response = await fetch(`${BASE_URL}/tickers/batch?symbols=${symbolsParam}`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log(`Batch data received:`, {
+      successCount: Object.keys(data.tickers).length,
+      errorCount: Object.keys(data.errors).length,
+      marketHours: data.market_hours,
+      cacheTTL: data.cache_ttl_seconds
+    });
+    
+    return data;
+  } catch (error) {
+    console.error('Batch API error:', error);
+    throw error;
+  }
+};
+
 // News API function
 export const getNews = async (limit = 3) => {
   try {

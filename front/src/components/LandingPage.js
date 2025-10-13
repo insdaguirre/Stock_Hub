@@ -5,6 +5,7 @@ import { FaChartLine } from 'react-icons/fa';
 import TickerCard from './TickerCard';
 import NewsCard from './NewsCard';
 import { getNews } from '../services/api';
+import { TickerDataProvider, useTickerData } from '../contexts/TickerDataContext';
 import colors from '../styles/colors';
 
 const PageContainer = styled.div`
@@ -179,28 +180,87 @@ const CTAButton = styled.button`
   }
 `;
 
-const LandingPage = () => {
+const CacheInfo = styled.div`
+  text-align: center;
+  font-size: 12px;
+  color: ${colors.textTertiary};
+  margin-bottom: 1rem;
+  padding: 8px;
+  background: ${colors.cardBackground};
+  border-radius: 8px;
+  border: 1px solid ${colors.border};
+`;
+
+const MarketOverview = () => {
+  const { tickerData, loading, error, cacheInfo, fetchTickerData } = useTickerData();
   const [tickers] = useState([
     'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 
     'META', 'NFLX', 'AMD', 'INTC', 'ORCL', 'CRM'
   ]);
   const [errors, setErrors] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [news, setNews] = useState([]);
-  const [newsLoading, setNewsLoading] = useState(true);
 
   const handleTickerError = (symbol, error) => {
     setErrors(prev => ({ ...prev, [symbol]: error }));
   };
 
   useEffect(() => {
-    // Simulate loading time for better UX
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 1000);
+    const loadTickerData = async () => {
+      try {
+        await fetchTickerData(tickers);
+      } catch (err) {
+        console.error('Error loading ticker data:', err);
+      }
+    };
 
-    return () => clearTimeout(timer);
-  }, []);
+    loadTickerData();
+  }, [tickers, fetchTickerData]);
+
+  const errorCount = Object.keys(errors).length;
+  const hasErrors = errorCount > 0;
+
+  return (
+    <>
+      <SectionTitle>Market Overview</SectionTitle>
+
+      {loading ? (
+        <LoadingContainer>
+          Loading market data...
+        </LoadingContainer>
+      ) : (
+        <>
+          {hasErrors && (
+            <ErrorMessage>
+              {errorCount} stock{errorCount > 1 ? 's' : ''} failed to load. 
+              Some data may be unavailable due to API limitations.
+            </ErrorMessage>
+          )}
+          
+          {cacheInfo && (
+            <CacheInfo>
+              {cacheInfo.marketHours ? 'Market Open' : 'Market Closed'} • 
+              Cache expires in {Math.round(cacheInfo.cacheTTL / 60)} minutes
+            </CacheInfo>
+          )}
+          
+          <TickerGrid>
+            {tickers.map((symbol) => (
+              <TickerCard
+                key={symbol}
+                symbol={symbol}
+                onError={handleTickerError}
+                tickerData={tickerData[symbol]}
+              />
+            ))}
+          </TickerGrid>
+        </>
+      )}
+    </>
+  );
+};
+
+const LandingPage = () => {
+  const [news, setNews] = useState([]);
+  const [newsLoading, setNewsLoading] = useState(true);
 
   // Fetch news articles
   useEffect(() => {
@@ -226,79 +286,53 @@ const LandingPage = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const errorCount = Object.keys(errors).length;
-  const hasErrors = errorCount > 0;
-
   return (
-    <PageContainer>
-      <MainContent>
-        <Header>
-          <Title>StockHub</Title>
-        </Header>
+    <TickerDataProvider>
+      <PageContainer>
+        <MainContent>
+          <Header>
+            <Title>StockHub</Title>
+          </Header>
 
-        <CTASection>
-          <CTATitle>Unlock Advanced Stock Predictions</CTATitle>
-          <CTADescription>
-            Create a free account to access our AI-powered stock prediction models, 
-            personalized insights, and advanced market analysis tools.
-          </CTADescription>
-          <CTAButton onClick={() => window.location.href = '#/register'}>
-            Get Started Free
-          </CTAButton>
-        </CTASection>
+          <CTASection>
+            <CTATitle>Unlock Advanced Stock Predictions</CTATitle>
+            <CTADescription>
+              Create a free account to access our AI-powered stock prediction models, 
+              personalized insights, and advanced market analysis tools.
+            </CTADescription>
+            <CTAButton onClick={() => window.location.href = '#/register'}>
+              Get Started Free
+            </CTAButton>
+          </CTASection>
 
-        <SectionTitle>Latest Financial News</SectionTitle>
-        
-        {newsLoading ? (
-          <LoadingContainer>
-            Loading latest news...
-          </LoadingContainer>
-        ) : (
-          <NewsGrid>
-            {news.map((article, index) => (
-              <NewsCard key={article.id || index} article={article} />
-            ))}
-          </NewsGrid>
-        )}
-
-        <SectionTitle>Market Overview</SectionTitle>
-
-        {loading ? (
-          <LoadingContainer>
-            Loading market data...
-          </LoadingContainer>
-        ) : (
-          <>
-            {hasErrors && (
-              <ErrorMessage>
-                {errorCount} stock{errorCount > 1 ? 's' : ''} failed to load. 
-                Some data may be unavailable due to API limitations.
-              </ErrorMessage>
-            )}
-            
-            <TickerGrid>
-              {tickers.map((symbol) => (
-                <TickerCard
-                  key={symbol}
-                  symbol={symbol}
-                  onError={handleTickerError}
-                />
+          <SectionTitle>Latest Financial News</SectionTitle>
+          
+          {newsLoading ? (
+            <LoadingContainer>
+              Loading latest news...
+            </LoadingContainer>
+          ) : (
+            <NewsGrid>
+              {news.map((article, index) => (
+                <NewsCard key={article.id || index} article={article} />
               ))}
-            </TickerGrid>
-          </>
-        )}
+            </NewsGrid>
+          )}
 
-        <CTA>
-          <CTAText>
-            Ready to make informed investment decisions?
-          </CTAText>
-          <CTALink href="#/predict">
-            <FaChartLine />
-            Start Predicting
-          </CTALink>
-        </CTA>
-      </MainContent>
-    </PageContainer>
+          <MarketOverview />
+
+          <CTA>
+            <CTAText>
+              Ready to make informed investment decisions?
+            </CTAText>
+            <CTALink href="#/predict">
+              <FaChartLine />
+              Start Predicting
+            </CTALink>
+          </CTA>
+        </MainContent>
+      </PageContainer>
+    </TickerDataProvider>
   );
 };
 

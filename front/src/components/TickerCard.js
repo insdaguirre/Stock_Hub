@@ -179,13 +179,23 @@ const XAxisLabel = styled.div`
   font-variant-numeric: tabular-nums;
 `;
 
-const TickerCard = ({ symbol, onError }) => {
+const TickerCard = ({ symbol, onError, tickerData }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
+    // If tickerData is provided (from context), use it directly
+    if (tickerData) {
+      console.log(`Using precomputed data for ${symbol}`);
+      setData(tickerData);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    // Fallback to individual API call if no tickerData provided
     const fetchData = async () => {
       try {
         setLoading(true);
@@ -238,7 +248,7 @@ const TickerCard = ({ symbol, onError }) => {
     };
 
     fetchData();
-  }, [symbol, onError]);
+  }, [symbol, onError, tickerData]);
 
   const handleClick = () => {
     navigate(`/stock/${symbol}`);

@@ -162,6 +162,96 @@ def _throttle(symbol: str, window_seconds: int = 5):
     except Exception:
         return
 
+def is_market_hours() -> bool:
+    """Check if US stock market is currently open"""
+    from zoneinfo import ZoneInfo
+    now = datetime.now(ZoneInfo('America/New_York'))
+    weekday = now.weekday()
+    
+    # Market closed on weekends
+    if weekday >= 5:  # Saturday = 5, Sunday = 6
+        return False
+    
+    # Market hours: 9:30 AM - 4:00 PM ET
+    market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
+    market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
+    
+    return market_open <= now <= market_close
+
+def get_smart_cache_ttl() -> int:
+    """Return appropriate TTL based on market hours"""
+    if is_market_hours():
+        return 10 * 60  # 10 minutes during market hours
+    else:
+        return 24 * 60 * 60  # 24 hours when market is closed
+
+def get_ticker_cache_key(symbol: str) -> str:
+    """Generate cache key for ticker data with date-based invalidation"""
+    today = datetime.now().strftime('%Y-%m-%d')
+    return f"ticker:5day:{symbol}:{today}"
+
+def is_trading_day(date_str: str) -> bool:
+    """Check if a date string is a trading day (not weekend)"""
+    try:
+        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+        return date_obj.weekday() < 5  # Monday = 0, Friday = 4
+    except:
+        return False
+
+def precompute_ticker_data(symbol: str) -> dict:
+    """Precompute the exact 5-day data format for frontend"""
+    try:
+        # Get 1 week of data to ensure we have 5 trading days
+        raw_data = fetch_stock_data(symbol, full=False)
+        
+        # Process to get exactly 5 trading days
+        trading_days = [d for d in raw_data if is_trading_day(d['date'])]
+        last_5_days = trading_days[-5:]
+        
+        if len(last_5_days) < 2:
+            raise Exception("Insufficient trading days")
+        
+        return {
+            "symbol": symbol,
+            "points": [
+                {
+                    "timestamp": datetime.strptime(d['date'], '%Y-%m-%d').isoformat(),
+                    "close": d['price']
+                }
+                for d in last_5_days
+            ],
+            "current_price": last_5_days[-1]['price'],
+            "previous_price": last_5_days[-2]['price'],
+            "computed_at": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        print(f"Error precomputing data for {symbol}: {e}")
+        raise
+
+def get_ticker_data_cached(symbol: str):
+    """Get 5-day ticker data with smart caching"""
+    cache_key = get_ticker_cache_key(symbol)
+    cached = _cache_get(cache_key)
+    
+    if cached:
+        try:
+            data = json.loads(cached)
+            print(json.dumps({"route": "ticker_cached", "symbol": symbol, "cache_hit": True}))
+            return data
+        except Exception:
+            pass
+    
+    # Cache miss - fetch and precompute data
+    try:
+        data = precompute_ticker_data(symbol)
+        ttl = get_smart_cache_ttl()
+        _cache_set(cache_key, json.dumps(data), ttl_seconds=ttl)
+        print(json.dumps({"route": "ticker_cached", "symbol": symbol, "cache_hit": False, "ttl_seconds": ttl}))
+        return data
+    except Exception as e:
+        print(f"Failed to get ticker data for {symbol}: {e}")
+        raise
+
 def _request_with_backoff(url, max_retries=3):
     """Perform a GET with simple exponential backoff for AV rate limits."""
     backoff = 1
@@ -750,6 +840,60 @@ async def metrics():
     return Response(content=data, media_type=CONTENT_TYPE_LATEST)
 
 
+@app.post("/api/cache/cleanup")
+async def cleanup_daily_cache():
+    """Clean up old ticker cache entries (run daily at 6 AM ET)"""
+    if not redis_client:
+        return {"status": "no_redis", "message": "Redis not available"}
+    
+    try:
+        pattern = "ticker:5day:*"
+        keys = redis_client.keys(pattern)
+        
+        # Remove keys older than 2 days
+        cutoff_date = (datetime.now() - timedelta(days=2)).strftime('%Y-%m-%d')
+        old_keys = [k for k in keys if cutoff_date in k]
+        
+        if old_keys:
+            redis_client.delete(*old_keys)
+            return {
+                "status": "cleaned", 
+                "keys_removed": len(old_keys),
+                "cutoff_date": cutoff_date
+            }
+        
+        return {"status": "no_old_keys", "total_keys": len(keys)}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.get("/api/cache/status")
+async def get_cache_status():
+    """Get cache status and statistics"""
+    if not redis_client:
+        return {"status": "no_redis", "message": "Redis not available"}
+    
+    try:
+        pattern = "ticker:5day:*"
+        keys = redis_client.keys(pattern)
+        
+        # Group by date
+        by_date = {}
+        for key in keys:
+            parts = key.split(':')
+            if len(parts) >= 4:
+                date = parts[3]
+                by_date[date] = by_date.get(date, 0) + 1
+        
+        return {
+            "status": "ok",
+            "total_keys": len(keys),
+            "by_date": by_date,
+            "market_hours": is_market_hours(),
+            "current_ttl_seconds": get_smart_cache_ttl()
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @app.get("/api/news")
 async def get_news(symbol: Optional[str] = None, limit: int = 6):
     """Return up to 6 recent market or symbol-specific news articles.
@@ -814,6 +958,53 @@ def _compute_start_date(range_key: str, now_dt: datetime) -> datetime:
         return now_dt - timedelta(days=365*10)
     return now_dt - timedelta(days=365*20)
 
+
+@app.get("/api/tickers/batch")
+async def get_tickers_batch(symbols: str):
+    """Get data for multiple tickers in one request with smart caching"""
+    started = time.perf_counter()
+    try:
+        symbol_list = [s.strip().upper() for s in symbols.split(',') if s.strip()]
+        
+        if not symbol_list:
+            raise HTTPException(status_code=400, detail="No symbols provided")
+        
+        if len(symbol_list) > 20:  # Limit to prevent abuse
+            raise HTTPException(status_code=400, detail="Too many symbols (max 20)")
+        
+        results = {}
+        errors = {}
+        
+        for symbol in symbol_list:
+            try:
+                results[symbol] = get_ticker_data_cached(symbol)
+            except Exception as e:
+                errors[symbol] = str(e)
+                print(f"Error fetching {symbol}: {e}")
+        
+        response = {
+            "tickers": results,
+            "errors": errors,
+            "cached_at": datetime.utcnow().isoformat(),
+            "market_hours": is_market_hours(),
+            "cache_ttl_seconds": get_smart_cache_ttl()
+        }
+        
+        print(json.dumps({
+            "route": "/api/tickers/batch", 
+            "symbols": symbol_list, 
+            "success_count": len(results),
+            "error_count": len(errors),
+            "latency_ms": int((time.perf_counter()-started)*1000)
+        }))
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Batch ticker error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/timeseries/{symbol}")
 async def get_timeseries(symbol: str, range: str = '1M'):
