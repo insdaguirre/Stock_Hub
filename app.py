@@ -1052,32 +1052,38 @@ async def get_overview(symbol: str):
 @app.post("/api/auth/register", response_model=UserResponse)
 async def register(user: UserCreate, db: Session = Depends(get_db)):
     """Register a new user."""
-    # Check if username already exists
-    if get_user_by_username(db, user.username):
-        raise HTTPException(
-            status_code=400,
-            detail="Username already registered"
+    try:
+        # Check if username already exists
+        if get_user_by_username(db, user.username):
+            raise HTTPException(
+                status_code=400,
+                detail="Username already registered"
+            )
+        
+        # Check if email already exists
+        if get_user_by_email(db, user.email):
+            raise HTTPException(
+                status_code=400,
+                detail="Email already registered"
+            )
+        
+        # Create new user
+        hashed_password = get_password_hash(user.password)
+        db_user = User(
+            username=user.username,
+            email=user.email,
+            hashed_password=hashed_password
         )
-    
-    # Check if email already exists
-    if get_user_by_email(db, user.email):
-        raise HTTPException(
-            status_code=400,
-            detail="Email already registered"
-        )
-    
-    # Create new user
-    hashed_password = get_password_hash(user.password)
-    db_user = User(
-        username=user.username,
-        email=user.email,
-        hashed_password=hashed_password
-    )
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    
-    return db_user
+        db.add(db_user)
+        db.commit()
+        db.refresh(db_user)
+        
+        return db_user
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Registration error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 @app.post("/api/auth/login", response_model=Token)
 async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
