@@ -111,11 +111,6 @@ const CTA = styled.div`
   margin-top: 3rem;
 `;
 
-const CTAText = styled.p`
-  font-size: 18px;
-  color: ${colors.textSecondary};
-  margin: 0 0 1.5rem 0;
-`;
 
 const CTALink = styled.a`
   display: inline-flex;
