@@ -94,27 +94,82 @@ const ChangeIcon = styled.div`
   font-size: 12px;
 `;
 
-const ChartContainer = styled.div`
-  height: 80px;
+const ChartSection = styled.div`
   margin-bottom: 1rem;
 `;
 
+const TimeframeLabel = styled.div`
+  font-size: 10px;
+  color: #888;
+  margin-bottom: 0.5rem;
+  text-align: center;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+`;
+
+const ChartContainer = styled.div`
+  height: 60px;
+  position: relative;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 4px;
+  padding: 4px;
+`;
+
 const LoadingContainer = styled.div`
-  height: 80px;
+  height: 60px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #666;
-  font-size: 12px;
+  font-size: 10px;
 `;
 
 const ErrorContainer = styled.div`
-  height: 80px;
+  height: 60px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #ff6b6b;
-  font-size: 12px;
+  font-size: 10px;
+`;
+
+const AxisContainer = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-top: 4px;
+  font-size: 8px;
+  color: #666;
+`;
+
+const YAxisContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 60px;
+  min-width: 40px;
+`;
+
+const YAxisLabel = styled.div`
+  font-size: 8px;
+  color: #666;
+  text-align: right;
+  line-height: 1;
+`;
+
+const XAxisContainer = styled.div`
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  margin-left: 8px;
+`;
+
+const XAxisLabel = styled.div`
+  font-size: 8px;
+  color: #666;
+  text-align: center;
+  flex: 1;
+  line-height: 1;
 `;
 
 const TickerCard = ({ symbol, onError }) => {
@@ -134,15 +189,29 @@ const TickerCard = ({ symbol, onError }) => {
         
         if (response && response.series && response.series.points && response.series.points.length >= 2) {
           const points = response.series.points.slice(-5); // Last 5 days
-          const chartData = points.map(point => ({
+          const prices = points.map(point => parseFloat(point.close));
+          const minPrice = Math.min(...prices);
+          const maxPrice = Math.max(...prices);
+          
+          const chartData = points.map((point, index) => ({
             timestamp: new Date(point.timestamp).getTime(),
-            price: parseFloat(point.close)
+            price: parseFloat(point.close),
+            date: new Date(point.timestamp)
           }));
+          
+          // Format dates for X-axis
+          const dateLabels = points.map(point => {
+            const date = new Date(point.timestamp);
+            return date.toLocaleDateString('en-US', { weekday: 'short' });
+          });
           
           setData({
             currentPrice: parseFloat(points[points.length - 1].close),
             previousPrice: parseFloat(points[points.length - 2].close),
-            chartData: chartData
+            chartData: chartData,
+            minPrice: minPrice,
+            maxPrice: maxPrice,
+            dateLabels: dateLabels
           });
         } else {
           throw new Error('Insufficient data points');
@@ -190,38 +259,56 @@ const TickerCard = ({ symbol, onError }) => {
         )}
       </PriceSection>
       
-      <ChartContainer>
-        {loading && (
-          <LoadingContainer>Loading chart...</LoadingContainer>
-        )}
+      <ChartSection>
+        <TimeframeLabel>Last 5 Days</TimeframeLabel>
         
-        {error && (
-          <ErrorContainer>Chart unavailable</ErrorContainer>
-        )}
+        <ChartContainer>
+          {loading && (
+            <LoadingContainer>Loading chart...</LoadingContainer>
+          )}
+          
+          {error && (
+            <ErrorContainer>Chart unavailable</ErrorContainer>
+          )}
+          
+          {data && data.chartData && (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={data.chartData}>
+                <XAxis 
+                  dataKey="timestamp" 
+                  hide 
+                  type="number" 
+                  scale="time" 
+                  domain={['dataMin', 'dataMax']}
+                />
+                <YAxis hide domain={[data.minPrice * 0.999, data.maxPrice * 1.001]} />
+                <Line
+                  type="monotone"
+                  dataKey="price"
+                  stroke={isPositive ? '#00d4aa' : '#ff6b6b'}
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </ChartContainer>
         
         {data && data.chartData && (
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data.chartData}>
-              <XAxis 
-                dataKey="timestamp" 
-                hide 
-                type="number" 
-                scale="time" 
-                domain={['dataMin', 'dataMax']}
-              />
-              <YAxis hide domain={['dataMin - 1', 'dataMax + 1']} />
-              <Line
-                type="monotone"
-                dataKey="price"
-                stroke={isPositive ? '#00d4aa' : '#ff6b6b'}
-                strokeWidth={2}
-                dot={false}
-                activeDot={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          <AxisContainer>
+            <YAxisContainer>
+              <YAxisLabel>${data.maxPrice.toFixed(2)}</YAxisLabel>
+              <YAxisLabel>${data.minPrice.toFixed(2)}</YAxisLabel>
+            </YAxisContainer>
+            <XAxisContainer>
+              {data.dateLabels.map((label, index) => (
+                <XAxisLabel key={index}>{label}</XAxisLabel>
+              ))}
+            </XAxisContainer>
+          </AxisContainer>
         )}
-      </ChartContainer>
+      </ChartSection>
     </CardContainer>
   );
 };
