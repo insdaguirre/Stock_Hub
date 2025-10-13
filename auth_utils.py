@@ -14,12 +14,8 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Password hashing - bcrypt has a 72 byte limit, so we configure it to truncate
-pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto",
-    bcrypt__truncate_error=False  # Don't raise error, just truncate to 72 bytes
-)
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # JWT settings
 SECRET_KEY = os.getenv("JWT_SECRET", "your-secret-key-change-this-in-production")
@@ -30,11 +26,19 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440
 security = HTTPBearer()
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against its hash."""
+    """Verify a password against its hash. Truncate to 72 bytes to match hashing."""
+    # bcrypt has a 72-byte limit; truncate the password if needed
+    password_bytes = plain_password.encode('utf-8')
+    if len(password_bytes) > 72:
+        plain_password = password_bytes[:72].decode('utf-8', errors='ignore')
     return pwd_context.verify(plain_password, hashed_password)
 
 def get_password_hash(password: str) -> str:
-    """Hash a password."""
+    """Hash a password. Truncate to 72 bytes to avoid bcrypt error."""
+    # bcrypt has a 72-byte limit; truncate the password if needed
+    password_bytes = password.encode('utf-8')
+    if len(password_bytes) > 72:
+        password = password_bytes[:72].decode('utf-8', errors='ignore')
     return pwd_context.hash(password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
