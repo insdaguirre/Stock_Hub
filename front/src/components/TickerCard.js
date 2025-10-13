@@ -116,22 +116,27 @@ const ErrorContainer = styled.div`
   font-size: 12px;
 `;
 
-const TickerCard = ({ symbol, onError }) => {
+const TickerCard = ({ symbol, onError, delay = 0 }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchData = async (retryCount = 0) => {
       try {
         setLoading(true);
         setError(null);
         
+        // Add delay to prevent overwhelming the browser with concurrent requests
+        if (delay > 0) {
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+        
         // Fetch 5-day data for the mini chart
         const response = await getTimeSeries(symbol, '5d');
         
-        if (response && response.series && response.series.points) {
+        if (response && response.series && response.series.points && response.series.points.length >= 2) {
           const points = response.series.points.slice(-5); // Last 5 days
           const chartData = points.map(point => ({
             timestamp: new Date(point.timestamp).getTime(),
@@ -144,10 +149,18 @@ const TickerCard = ({ symbol, onError }) => {
             chartData: chartData
           });
         } else {
-          throw new Error('No data available');
+          throw new Error('Insufficient data points');
         }
       } catch (err) {
-        console.error(`Error fetching data for ${symbol}:`, err);
+        console.error(`Error fetching data for ${symbol} (attempt ${retryCount + 1}):`, err);
+        
+        // Retry once after a delay if it's a network error
+        if (retryCount === 0 && (err.message.includes('ERR_INSUFFICIENT_RESOURCES') || err.message.includes('Failed to fetch'))) {
+          console.log(`Retrying ${symbol} in 2 seconds...`);
+          setTimeout(() => fetchData(1), 2000);
+          return;
+        }
+        
         setError(err.message);
         if (onError) onError(symbol, err.message);
       } finally {
@@ -156,7 +169,7 @@ const TickerCard = ({ symbol, onError }) => {
     };
 
     fetchData();
-  }, [symbol, onError]);
+  }, [symbol, onError, delay]);
 
   const handleClick = () => {
     navigate(`/stock/${symbol}`);
