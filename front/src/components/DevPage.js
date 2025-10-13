@@ -276,76 +276,75 @@ const DevPage = () => {
 
         <Section>
           <SectionTitle>
-            <IconWrapper><FaServer /></IconWrapper>
-            Technology Stack
+            <IconWrapper><FaChartLine /></IconWrapper>
+            Key Features
           </SectionTitle>
           
           <ArchitectureGrid>
             <ArchitectureCard>
-              <CardTitle>
-                <FaServer />
-                Backend
-              </CardTitle>
-              <CardDescription>
-                FastAPI-powered REST API with Redis caching, background job processing, and multiple data sources.
-              </CardDescription>
-              <TechStack>
-                <TechTag>FastAPI</TechTag>
-                <TechTag>Redis</TechTag>
-                <TechTag>RQ Workers</TechTag>
-                <TechTag>PostgreSQL</TechTag>
-                <TechTag>Docker</TechTag>
-              </TechStack>
+              <CardTitle>Real-time Data</CardTitle>
+              <FeatureList>
+                <FeatureItem>
+                  <FeatureIcon><FaArrowRight /></FeatureIcon>
+                  Live market data integration
+                </FeatureItem>
+                <FeatureItem>
+                  <FeatureIcon><FaArrowRight /></FeatureIcon>
+                  Intelligent caching system
+                </FeatureItem>
+                <FeatureItem>
+                  <FeatureIcon><FaArrowRight /></FeatureIcon>
+                  Fallback API strategies
+                </FeatureItem>
+                <FeatureItem>
+                  <FeatureIcon><FaArrowRight /></FeatureIcon>
+                  Market hours detection
+                </FeatureItem>
+              </FeatureList>
             </ArchitectureCard>
             
             <ArchitectureCard>
-              <CardTitle>
-                <FaChartLine />
-                Machine Learning
-              </CardTitle>
-              <CardDescription>
-                Multiple ML models including LSTM, Random Forest, Prophet, XGBoost, and ARIMA for comprehensive predictions.
-              </CardDescription>
-              <TechStack>
-                <TechTag>PyTorch</TechTag>
-                <TechTag>Scikit-learn</TechTag>
-                <TechTag>Prophet</TechTag>
-                <TechTag>XGBoost</TechTag>
-                <TechTag>ARIMA</TechTag>
-              </TechStack>
+              <CardTitle>ML Predictions</CardTitle>
+              <FeatureList>
+                <FeatureItem>
+                  <FeatureIcon><FaArrowRight /></FeatureIcon>
+                  Multiple model ensemble
+                </FeatureItem>
+                <FeatureItem>
+                  <FeatureIcon><FaArrowRight /></FeatureIcon>
+                  Multi-timeframe forecasts
+                </FeatureItem>
+                <FeatureItem>
+                  <FeatureIcon><FaArrowRight /></FeatureIcon>
+                  Model accuracy tracking
+                </FeatureItem>
+                <FeatureItem>
+                  <FeatureIcon><FaArrowRight /></FeatureIcon>
+                  Background retraining
+                </FeatureItem>
+              </FeatureList>
             </ArchitectureCard>
             
             <ArchitectureCard>
-              <CardTitle>
-                <FaDatabase />
-                Data Sources
-              </CardTitle>
-              <CardDescription>
-                Real-time market data from Alpha Vantage and Finnhub APIs with intelligent caching and fallback strategies.
-              </CardDescription>
-              <TechStack>
-                <TechTag>Alpha Vantage</TechTag>
-                <TechTag>Finnhub</TechTag>
-                <TechTag>Yahoo Finance</TechTag>
-                <TechTag>Redis Cache</TechTag>
-              </TechStack>
-            </ArchitectureCard>
-            
-            <ArchitectureCard>
-              <CardTitle>
-                <FaCloud />
-                Frontend
-              </CardTitle>
-              <CardDescription>
-                Modern React application with professional finance UI, real-time charts, and responsive design.
-              </CardDescription>
-              <TechStack>
-                <TechTag>React</TechTag>
-                <TechTag>Styled Components</TechTag>
-                <TechTag>Recharts</TechTag>
-                <TechTag>React Router</TechTag>
-                <TechTag>GitHub Pages</TechTag>
-              </TechStack>
+              <CardTitle>User Experience</CardTitle>
+              <FeatureList>
+                <FeatureItem>
+                  <FeatureIcon><FaArrowRight /></FeatureIcon>
+                  Professional finance UI
+                </FeatureItem>
+                <FeatureItem>
+                  <FeatureIcon><FaArrowRight /></FeatureIcon>
+                  Interactive charts
+                </FeatureItem>
+                <FeatureItem>
+                  <FeatureIcon><FaArrowRight /></FeatureIcon>
+                  Responsive design
+                </FeatureItem>
+                <FeatureItem>
+                  <FeatureIcon><FaArrowRight /></FeatureIcon>
+                  State persistence
+                </FeatureItem>
+              </FeatureList>
             </ArchitectureCard>
           </ArchitectureGrid>
         </Section>
@@ -424,75 +423,76 @@ const DevPage = () => {
 
         <Section>
           <SectionTitle>
-            <IconWrapper><FaChartLine /></IconWrapper>
-            Key Features
+            <IconWrapper><FaServer /></IconWrapper>
+            Technology Stack
           </SectionTitle>
           
           <ArchitectureGrid>
             <ArchitectureCard>
-              <CardTitle>Real-time Data</CardTitle>
-              <FeatureList>
-                <FeatureItem>
-                  <FeatureIcon><FaArrowRight /></FeatureIcon>
-                  Live market data integration
-                </FeatureItem>
-                <FeatureItem>
-                  <FeatureIcon><FaArrowRight /></FeatureIcon>
-                  Intelligent caching system
-                </FeatureItem>
-                <FeatureItem>
-                  <FeatureIcon><FaArrowRight /></FeatureIcon>
-                  Fallback API strategies
-                </FeatureItem>
-                <FeatureItem>
-                  <FeatureIcon><FaArrowRight /></FeatureIcon>
-                  Market hours detection
-                </FeatureItem>
-              </FeatureList>
+              <CardTitle>
+                <FaServer />
+                Backend
+              </CardTitle>
+              <CardDescription>
+                FastAPI-powered REST API with Redis caching, background job processing, and multiple data sources.
+              </CardDescription>
+              <TechStack>
+                <TechTag>FastAPI</TechTag>
+                <TechTag>Redis</TechTag>
+                <TechTag>RQ Workers</TechTag>
+                <TechTag>PostgreSQL</TechTag>
+                <TechTag>Docker</TechTag>
+              </TechStack>
             </ArchitectureCard>
             
             <ArchitectureCard>
-              <CardTitle>ML Predictions</CardTitle>
-              <FeatureList>
-                <FeatureItem>
-                  <FeatureIcon><FaArrowRight /></FeatureIcon>
-                  Multiple model ensemble
-                </FeatureItem>
-                <FeatureItem>
-                  <FeatureIcon><FaArrowRight /></FeatureIcon>
-                  Multi-timeframe forecasts
-                </FeatureItem>
-                <FeatureItem>
-                  <FeatureIcon><FaArrowRight /></FeatureIcon>
-                  Model accuracy tracking
-                </FeatureItem>
-                <FeatureItem>
-                  <FeatureIcon><FaArrowRight /></FeatureIcon>
-                  Background retraining
-                </FeatureItem>
-              </FeatureList>
+              <CardTitle>
+                <FaChartLine />
+                Machine Learning
+              </CardTitle>
+              <CardDescription>
+                Multiple ML models including LSTM, Random Forest, Prophet, XGBoost, and ARIMA for comprehensive predictions.
+              </CardDescription>
+              <TechStack>
+                <TechTag>PyTorch</TechTag>
+                <TechTag>Scikit-learn</TechTag>
+                <TechTag>Prophet</TechTag>
+                <TechTag>XGBoost</TechTag>
+                <TechTag>ARIMA</TechTag>
+              </TechStack>
             </ArchitectureCard>
             
             <ArchitectureCard>
-              <CardTitle>User Experience</CardTitle>
-              <FeatureList>
-                <FeatureItem>
-                  <FeatureIcon><FaArrowRight /></FeatureIcon>
-                  Professional finance UI
-                </FeatureItem>
-                <FeatureItem>
-                  <FeatureIcon><FaArrowRight /></FeatureIcon>
-                  Interactive charts
-                </FeatureItem>
-                <FeatureItem>
-                  <FeatureIcon><FaArrowRight /></FeatureIcon>
-                  Responsive design
-                </FeatureItem>
-                <FeatureItem>
-                  <FeatureIcon><FaArrowRight /></FeatureIcon>
-                  State persistence
-                </FeatureItem>
-              </FeatureList>
+              <CardTitle>
+                <FaDatabase />
+                Data Sources
+              </CardTitle>
+              <CardDescription>
+                Real-time market data from Alpha Vantage and Finnhub APIs with intelligent caching and fallback strategies.
+              </CardDescription>
+              <TechStack>
+                <TechTag>Alpha Vantage</TechTag>
+                <TechTag>Finnhub</TechTag>
+                <TechTag>Yahoo Finance</TechTag>
+                <TechTag>Redis Cache</TechTag>
+              </TechStack>
+            </ArchitectureCard>
+            
+            <ArchitectureCard>
+              <CardTitle>
+                <FaCloud />
+                Frontend
+              </CardTitle>
+              <CardDescription>
+                Modern React application with professional finance UI, real-time charts, and responsive design.
+              </CardDescription>
+              <TechStack>
+                <TechTag>React</TechTag>
+                <TechTag>Styled Components</TechTag>
+                <TechTag>Recharts</TechTag>
+                <TechTag>React Router</TechTag>
+                <TechTag>GitHub Pages</TechTag>
+              </TechStack>
             </ArchitectureCard>
           </ArchitectureGrid>
         </Section>
