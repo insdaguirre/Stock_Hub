@@ -675,52 +675,6 @@ const PredictPage = () => {
           </Subtitle>
         </Header>
 
-        <DisclaimerText>
-          Due to data pricing, the model pipeline and auto-trainer have been scaled down.
-        </DisclaimerText>
-
-        <SearchSection>
-          <SearchInput
-            type="text"
-            placeholder="Enter stock symbol (e.g., AAPL, MSFT, GOOGL)"
-            value={searchTerm}
-            onChange={handleSearch}
-            onKeyDown={(e) => { if (e.key === 'Enter') { fetchPredictions(); } }}
-          />
-          
-          <StockSelector>
-            <StockSelectorTitle>Selected Symbol: {selectedSymbol}</StockSelectorTitle>
-            <PredictButton
-              onClick={fetchPredictions}
-              disabled={loading}
-            >
-              {loading ? 'Getting Predictions…' : 'Get Predictions'}
-            </PredictButton>
-          </StockSelector>
-        </SearchSection>
-
-        {loading && (
-          <LoadingContainer>
-            <LoadingTitle>Generating Predictions ({Math.round(overallProgress)}% Complete)</LoadingTitle>
-            <ProgressContainer>
-              <ProgressBar 
-                progress={overallProgress}
-                label="Overall Progress"
-              />
-              {models.map(model => (
-                <ProgressBar 
-                  key={model.id}
-                  progress={loadingProgress[model.id] || 0}
-                  label={model.name}
-                  timeRemaining={Math.ceil((100 - (loadingProgress[model.id] || 0)) / 33)}
-                />
-              ))}
-            </ProgressContainer>
-          </LoadingContainer>
-        )}
-
-        {error && <ErrorMessage>{error}</ErrorMessage>}
-
         {/* Intraday Chart Section */}
         {intraday && (
           <IntradayCard>
@@ -903,6 +857,59 @@ const PredictPage = () => {
             )}
           </IntradayCard>
         )}
+
+        {/* Data Disclaimer */}
+        {intraday && (
+          <DisclaimerText style={{ marginTop: '1rem', marginBottom: '2rem' }}>
+            Due to data pricing, charts display data up to the last closed market day.
+          </DisclaimerText>
+        )}
+
+        <SearchSection>
+          <SearchInput
+            type="text"
+            placeholder="Enter stock symbol (e.g., AAPL, MSFT, GOOGL)"
+            value={searchTerm}
+            onChange={handleSearch}
+            onKeyDown={(e) => { if (e.key === 'Enter') { fetchPredictions(); } }}
+          />
+          
+          <StockSelector>
+            <StockSelectorTitle>Selected Symbol: {selectedSymbol}</StockSelectorTitle>
+            <PredictButton
+              onClick={fetchPredictions}
+              disabled={loading}
+            >
+              {loading ? 'Getting Predictions…' : 'Get Predictions'}
+            </PredictButton>
+          </StockSelector>
+        </SearchSection>
+
+        <DisclaimerText>
+          Due to data pricing, the model pipeline and auto-trainer have been scaled down.
+        </DisclaimerText>
+
+        {loading && (
+          <LoadingContainer>
+            <LoadingTitle>Generating Predictions ({Math.round(overallProgress)}% Complete)</LoadingTitle>
+            <ProgressContainer>
+              <ProgressBar 
+                progress={overallProgress}
+                label="Overall Progress"
+              />
+              {models.map(model => (
+                <ProgressBar 
+                  key={model.id}
+                  progress={loadingProgress[model.id] || 0}
+                  label={model.name}
+                  timeRemaining={Math.ceil((100 - (loadingProgress[model.id] || 0)) / 33)}
+                />
+              ))}
+            </ProgressContainer>
+          </LoadingContainer>
+        )}
+
+        {error && <ErrorMessage>{error}</ErrorMessage>}
 
         {/* Models Section */}
         {predictionsData && (
