@@ -242,7 +242,7 @@ const LandingPage = () => {
             Create a free account to access our AI-powered stock prediction models, 
             personalized insights, and advanced market analysis tools.
           </CTADescription>
-          <CTAButton onClick={() => window.location.href = '/register'}>
+          <CTAButton onClick={() => window.location.href = '#/register'}>
             Get Started Free
           </CTAButton>
         </CTASection>
@@ -292,7 +292,7 @@ const LandingPage = () => {
           <CTAText>
             Ready to make informed investment decisions?
           </CTAText>
-          <CTALink href="/predict">
+          <CTALink href="#/predict">
             <FaChartLine />
             Start Predicting
           </CTALink>
