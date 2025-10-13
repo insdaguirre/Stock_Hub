@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import styled from 'styled-components';
 import { useAuth } from '../contexts/AuthContext';
+import FinanceBackground from './FinanceBackground';
 import colors from '../styles/colors';
 
 const PageContainer = styled.div`
@@ -12,6 +13,8 @@ const PageContainer = styled.div`
   align-items: center;
   justify-content: center;
   padding: 2rem;
+  position: relative;
+  overflow-x: hidden;
 `;
 
 const RegisterCard = styled.div`
@@ -22,6 +25,8 @@ const RegisterCard = styled.div`
   width: 100%;
   max-width: 400px;
   box-shadow: 0 8px 32px ${colors.shadowMedium};
+  position: relative;
+  z-index: 1;
 `;
 
 const Title = styled.h1`
@@ -212,6 +217,7 @@ const RegisterPage = () => {
 
   return (
     <PageContainer>
+      <FinanceBackground />
       <RegisterCard>
         <Title>Create Account</Title>
         <Subtitle>Join StockHub to access predictions</Subtitle>
