@@ -189,6 +189,8 @@ const TickerCard = ({ symbol, onError }) => {
         
         if (response && response.series && response.series.points && response.series.points.length >= 2) {
           const points = response.series.points.slice(-5); // Last 5 days
+          console.log(`Processing ${symbol}:`, points.length, 'points');
+          
           const prices = points.map(point => parseFloat(point.close));
           const minPrice = Math.min(...prices);
           const maxPrice = Math.max(...prices);
@@ -205,6 +207,8 @@ const TickerCard = ({ symbol, onError }) => {
             return date.toLocaleDateString('en-US', { weekday: 'short' });
           });
           
+          console.log(`${symbol} data:`, { minPrice, maxPrice, dateLabels });
+          
           setData({
             currentPrice: parseFloat(points[points.length - 1].close),
             previousPrice: parseFloat(points[points.length - 2].close),
@@ -214,6 +218,7 @@ const TickerCard = ({ symbol, onError }) => {
             dateLabels: dateLabels
           });
         } else {
+          console.error(`${symbol}: Insufficient data points`, response);
           throw new Error('Insufficient data points');
         }
       } catch (err) {
@@ -295,7 +300,7 @@ const TickerCard = ({ symbol, onError }) => {
           )}
         </ChartContainer>
         
-        {data && data.chartData && (
+        {data && data.chartData && data.minPrice && data.maxPrice && data.dateLabels && (
           <AxisContainer>
             <YAxisContainer>
               <YAxisLabel>${data.maxPrice.toFixed(2)}</YAxisLabel>
