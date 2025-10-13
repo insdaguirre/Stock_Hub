@@ -685,6 +685,10 @@ const PredictPage = () => {
               </MarketStatus>
             </ChartHeader>
             
+            <DisclaimerText style={{ marginTop: '1rem', marginBottom: '1rem' }}>
+              Due to data pricing, charts display data up to the last closed market day.
+            </DisclaimerText>
+            
             <RangeTabs>
               {['1D','1W','1M','3M','6M','YTD','1Y','2Y','5Y','10Y'].map(r => (
                 <RangeTab 
@@ -856,13 +860,6 @@ const PredictPage = () => {
               </StatsGrid>
             )}
           </IntradayCard>
-        )}
-
-        {/* Data Disclaimer */}
-        {intraday && (
-          <DisclaimerText style={{ marginTop: '1rem', marginBottom: '2rem' }}>
-            Due to data pricing, charts display data up to the last closed market day.
-          </DisclaimerText>
         )}
 
         <SearchSection>
