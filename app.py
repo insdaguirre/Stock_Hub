@@ -54,7 +54,40 @@ app = FastAPI()
 # Create database tables
 create_tables()
 
-# CORS configuration
+# Force-add CORS headers for allowed origins - MUST be first middleware
+class CorsOverrideMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        origin = request.headers.get('origin', '')
+        
+        # Handle preflight explicitly to be robust across proxies
+        if request.method == 'OPTIONS':
+            allowed = origin in settings.CORS_ORIGINS or origin.endswith('.github.io')
+            headers = {
+                'Access-Control-Allow-Methods': 'DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT',
+                'Access-Control-Max-Age': '600',
+                'Access-Control-Allow-Headers': request.headers.get('access-control-request-headers', '*') or '*',
+            }
+            if allowed and origin:
+                headers['Access-Control-Allow-Origin'] = origin
+                headers['Access-Control-Allow-Credentials'] = 'true'
+                headers['Vary'] = 'Origin'
+            return Response(status_code=204, headers=headers)
+
+        response = await call_next(request)
+        
+        # Add CORS headers to all responses from allowed origins
+        if origin and (origin in settings.CORS_ORIGINS or origin.endswith('.github.io')):
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
+            vary = response.headers.get('Vary', '')
+            if 'Origin' not in vary:
+                response.headers['Vary'] = f"{vary}, Origin".strip(', ') if vary else 'Origin'
+        
+        return response
+
+app.add_middleware(CorsOverrideMiddleware)
+
+# CORS configuration (backup)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -68,54 +101,12 @@ app.add_middleware(
 class RequestIdMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         request_id = request.headers.get('x-request-id') or str(uuid4())
-        response = None
-        try:
-            response = await call_next(request)
-            return response
-        finally:
-            if response is None:
-                response = Response()
-            response.headers['x-request-id'] = request_id
+        response = await call_next(request)
+        response.headers['x-request-id'] = request_id
+        return response
 
 
 app.add_middleware(RequestIdMiddleware)
-
-# Force-add CORS headers for allowed origins as a safety net.
-class CorsOverrideMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        # Handle preflight explicitly to be robust across proxies
-        if request.method == 'OPTIONS':
-            origin = request.headers.get('origin')
-            allowed = False
-            try:
-                allowed = origin in settings.CORS_ORIGINS or (origin and origin.endswith('.github.io'))
-            except Exception:
-                allowed = False
-            headers = {
-                'Access-Control-Allow-Methods': 'DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT',
-                'Access-Control-Max-Age': '600',
-                'Access-Control-Allow-Headers': request.headers.get('access-control-request-headers', '*') or '*',
-            }
-            if allowed and origin:
-                headers['Access-Control-Allow-Origin'] = origin
-                headers['Access-Control-Allow-Credentials'] = 'true'
-                headers['Vary'] = 'Origin'
-            return Response(status_code=204, headers=headers)
-
-        response = await call_next(request)
-        try:
-            origin = request.headers.get('origin')
-            if origin and (origin in settings.CORS_ORIGINS or origin.endswith('.github.io')):
-                response.headers['Access-Control-Allow-Origin'] = origin
-                response.headers['Access-Control-Allow-Credentials'] = 'true'
-                # Preserve existing Vary values while ensuring Origin is present
-                vary = response.headers.get('Vary')
-                response.headers['Vary'] = f"{vary}, Origin" if vary and 'Origin' not in vary else (vary or 'Origin')
-        except Exception:
-            pass
-        return response
-
-app.add_middleware(CorsOverrideMiddleware)
 
 logger = logging.getLogger("stockhub")
 logging.basicConfig(level=logging.INFO)
