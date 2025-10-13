@@ -2,7 +2,7 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import styled from 'styled-components';
-import { FaChartLine, FaCode, FaHome, FaUser, FaSignOutAlt } from 'react-icons/fa';
+import { FaChartLine, FaCode, FaUser, FaSignOutAlt } from 'react-icons/fa';
 import { useAuth } from '../contexts/AuthContext';
 import colors from '../styles/colors';
 
@@ -61,10 +61,9 @@ const LogoIcon = styled.div`
 const LogoText = styled.h1`
   font-size: 24px;
   font-weight: 700;
-  color: ${props => props.active ? colors.bullGreen : colors.textPrimary};
+  color: ${colors.textPrimary};
   margin: 0;
   letter-spacing: -0.5px;
-  transition: color 0.2s ease;
 `;
 
 const NavLinks = styled.div`
@@ -162,13 +161,8 @@ const NavBar = () => {
     <NavContainer>
       <NavContent>
         <Logo active={isActive('/')} onClick={() => navigate('/')}>
-          {isActive('/') && (
-            <IconWrapper style={{ color: colors.bullGreen, marginRight: '8px' }}>
-              <FaHome />
-            </IconWrapper>
-          )}
           <LogoIcon active={isActive('/')}>SH</LogoIcon>
-          <LogoText active={isActive('/')}>StockHub</LogoText>
+          <LogoText>StockHub</LogoText>
         </Logo>
         
         <NavLinks>
