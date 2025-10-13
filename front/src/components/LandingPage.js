@@ -137,6 +137,48 @@ const CTALink = styled.a`
   }
 `;
 
+const CTASection = styled.div`
+  text-align: center;
+  margin: 2rem 0 3rem 0;
+  padding: 2rem;
+  background: ${colors.cardBackground};
+  border-radius: 16px;
+  border: 1px solid ${colors.border};
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+`;
+
+const CTATitle = styled.h2`
+  font-size: 24px;
+  font-weight: 600;
+  color: ${colors.textPrimary};
+  margin: 0 0 1rem 0;
+`;
+
+const CTADescription = styled.p`
+  font-size: 16px;
+  color: ${colors.textSecondary};
+  margin: 0 0 1.5rem 0;
+  line-height: 1.5;
+`;
+
+const CTAButton = styled.button`
+  background: ${colors.gradientGreen};
+  color: white;
+  border: none;
+  padding: 12px 32px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 200, 83, 0.3);
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 200, 83, 0.4);
+  }
+`;
+
 const LandingPage = () => {
   const [tickers] = useState([
     'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 
@@ -193,6 +235,17 @@ const LandingPage = () => {
         <Header>
           <Title>StockHub</Title>
         </Header>
+
+        <CTASection>
+          <CTATitle>Unlock Advanced Stock Predictions</CTATitle>
+          <CTADescription>
+            Create a free account to access our AI-powered stock prediction models, 
+            personalized insights, and advanced market analysis tools.
+          </CTADescription>
+          <CTAButton onClick={() => window.location.href = '/register'}>
+            Get Started Free
+          </CTAButton>
+        </CTASection>
 
         <SectionTitle>Latest Financial News</SectionTitle>
         

@@ -195,15 +195,10 @@ const NavBar = () => {
                 </LogoutButton>
               </>
             ) : (
-              <>
-                <AuthButton onClick={() => navigate('/login')}>
-                  <IconWrapper><FaUser /></IconWrapper>
-                  Login
-                </AuthButton>
-                <AuthButton onClick={() => navigate('/register')}>
-                  Sign Up
-                </AuthButton>
-              </>
+              <AuthButton onClick={() => navigate('/login')}>
+                <IconWrapper><FaUser /></IconWrapper>
+                Login
+              </AuthButton>
             )}
           </UserSection>
         </NavLinks>

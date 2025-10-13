@@ -2,31 +2,43 @@
 import React from 'react';
 import styled from 'styled-components';
 import { FaExternalLinkAlt, FaClock, FaNewspaper } from 'react-icons/fa';
+import colors from '../styles/colors';
 
 const CardContainer = styled.div`
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  border: 1px solid #333;
-  border-radius: 12px;
+  background: ${colors.gradientCardEnhanced};
+  border: 1px solid ${colors.border};
+  border-radius: 16px;
   padding: 1.5rem;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
   height: 100%;
   display: flex;
   flex-direction: column;
+  box-shadow: ${colors.shadowCard};
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: ${colors.gradientPrimary};
+  }
   
   &:hover {
     transform: translateY(-4px);
-    box-shadow: 0 8px 25px rgba(0, 212, 170, 0.15);
-    border-color: #00d4aa;
+    box-shadow: ${colors.shadowHover};
+    border-color: ${colors.bullGreen};
   }
 `;
 
 const NewsImage = styled.div`
   width: 100%;
   height: 200px;
-  background: linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%);
-  border-radius: 8px;
+  background: ${colors.gradientCard};
+  border-radius: 12px;
   margin-bottom: 1rem;
   position: relative;
   overflow: hidden;
@@ -42,7 +54,7 @@ const NewsImage = styled.div`
     align-items: center;
     justify-content: center;
     height: 100%;
-    color: #666;
+    color: ${colors.textTertiary};
     font-size: 2rem;
   }
 `;

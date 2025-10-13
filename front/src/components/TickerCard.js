@@ -9,20 +9,30 @@ import { requestQueue } from '../utils/requestQueue';
 import colors, { getPerformanceColor } from '../styles/colors';
 
 const CardContainer = styled.div`
-  background: ${colors.gradientCard};
+  background: ${colors.gradientCardEnhanced};
   border: 1px solid ${colors.border};
-  border-radius: 8px;
+  border-radius: 16px;
   padding: 1.5rem;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
-  box-shadow: 0 2px 8px ${colors.shadowLight};
+  box-shadow: ${colors.shadowCard};
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: ${props => props.positive ? colors.gradientSuccess : colors.gradientDanger};
+  }
   
   &:hover {
-    transform: translateY(-2px);
+    transform: translateY(-4px);
     border-color: ${props => props.positive ? colors.bullGreen : colors.bearRed};
-    box-shadow: 0 4px 16px ${colors.shadowMedium};
+    box-shadow: ${colors.shadowHover};
     
     .external-icon {
       opacity: 1;
