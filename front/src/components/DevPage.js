@@ -2,11 +2,12 @@
 import React from 'react';
 import styled from 'styled-components';
 import { FaGithub, FaDatabase, FaServer, FaCloud, FaChartLine, FaCog, FaArrowRight } from 'react-icons/fa';
+import colors from '../styles/colors';
 
 const PageContainer = styled.div`
   min-height: 100vh;
-  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
-  color: #ffffff;
+  background: ${colors.gradientDark};
+  color: ${colors.textPrimary};
   display: flex;
   flex-direction: column;
 `;
@@ -28,16 +29,13 @@ const Title = styled.h1`
   font-size: clamp(32px, 4vw, 48px);
   font-weight: 800;
   margin: 0 0 1rem 0;
-  background: linear-gradient(135deg, #00d4aa, #00a8cc);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: ${colors.bullGreen};
   letter-spacing: -1px;
 `;
 
 const Subtitle = styled.p`
   font-size: clamp(16px, 2vw, 20px);
-  color: #b0b0b0;
+  color: ${colors.textSecondary};
   margin: 0 0 2rem 0;
   font-weight: 300;
   line-height: 1.5;
@@ -47,19 +45,21 @@ const GitHubLink = styled.a`
   display: inline-flex;
   align-items: center;
   gap: 12px;
-  background: linear-gradient(135deg, #00d4aa, #00a8cc);
-  color: #000;
+  background: ${colors.bullGreen};
+  color: ${colors.darkBackground};
   padding: 16px 32px;
-  border-radius: 12px;
+  border-radius: 6px;
   text-decoration: none;
   font-weight: 600;
   font-size: 18px;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   margin-bottom: 3rem;
+  border: 1px solid ${colors.bullGreen};
   
   &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(0, 212, 170, 0.3);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px ${colors.shadowMedium};
+    background: ${colors.success};
   }
 `;
 
@@ -70,7 +70,7 @@ const Section = styled.div`
 const SectionTitle = styled.h2`
   font-size: 28px;
   font-weight: 700;
-  color: #ffffff;
+  color: ${colors.textPrimary};
   margin: 0 0 1.5rem 0;
   display: flex;
   align-items: center;
@@ -80,13 +80,13 @@ const SectionTitle = styled.h2`
     content: '';
     flex: 1;
     height: 2px;
-    background: linear-gradient(90deg, #00d4aa, transparent);
+    background: linear-gradient(90deg, ${colors.bullGreen}, transparent);
     border-radius: 1px;
   }
 `;
 
 const IconWrapper = styled.div`
-  color: #00d4aa;
+  color: ${colors.bullGreen};
   font-size: 24px;
 `;
 
@@ -98,23 +98,23 @@ const ArchitectureGrid = styled.div`
 `;
 
 const ArchitectureCard = styled.div`
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  border: 1px solid #333;
+  background: ${colors.gradientCard};
+  border: 1px solid ${colors.border};
   border-radius: 12px;
   padding: 2rem;
   transition: all 0.3s ease;
   
   &:hover {
     transform: translateY(-4px);
-    border-color: #00d4aa;
-    box-shadow: 0 8px 25px rgba(0, 212, 170, 0.2);
+    border-color: ${colors.bullGreen};
+    box-shadow: 0 4px 16px ${colors.shadowMedium};
   }
 `;
 
 const CardTitle = styled.h3`
   font-size: 20px;
   font-weight: 600;
-  color: #ffffff;
+  color: ${colors.textPrimary};
   margin: 0 0 1rem 0;
   display: flex;
   align-items: center;
@@ -122,7 +122,7 @@ const CardTitle = styled.h3`
 `;
 
 const CardDescription = styled.p`
-  color: #b0b0b0;
+  color: ${colors.textSecondary};
   line-height: 1.6;
   margin: 0 0 1rem 0;
 `;
@@ -135,13 +135,13 @@ const TechStack = styled.div`
 `;
 
 const TechTag = styled.span`
-  background: rgba(0, 212, 170, 0.1);
-  color: #00d4aa;
+  background: ${colors.hover};
+  color: ${colors.bullGreen};
   padding: 4px 12px;
   border-radius: 20px;
   font-size: 12px;
   font-weight: 500;
-  border: 1px solid rgba(0, 212, 170, 0.3);
+  border: 1px solid ${colors.bullGreen};
 `;
 
 
@@ -153,8 +153,8 @@ const ArchitectureFlow = styled.div`
 `;
 
 const FlowStep = styled.div`
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  border: 1px solid #333;
+  background: ${colors.gradientCard};
+  border: 1px solid ${colors.border};
   border-radius: 8px;
   padding: 1.5rem;
   text-align: center;
@@ -166,7 +166,7 @@ const FlowStep = styled.div`
     right: -20px;
     top: 50%;
     transform: translateY(-50%);
-    color: #00d4aa;
+    color: ${colors.bullGreen};
     font-size: 20px;
     font-weight: bold;
   }
@@ -177,22 +177,22 @@ const FlowStep = styled.div`
 `;
 
 const FlowTitle = styled.h4`
-  color: #00d4aa;
+  color: ${colors.bullGreen};
   margin: 0 0 0.5rem 0;
   font-size: 16px;
   font-weight: 600;
 `;
 
 const FlowDescription = styled.p`
-  color: #b0b0b0;
+  color: ${colors.textSecondary};
   margin: 0;
   font-size: 14px;
   line-height: 1.4;
 `;
 
 const DataFlowList = styled.div`
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  border: 1px solid #333;
+  background: ${colors.gradientCard};
+  border: 1px solid ${colors.border};
   border-radius: 8px;
   padding: 2rem;
   margin: 1rem 0;
@@ -203,9 +203,9 @@ const FlowItem = styled.div`
   align-items: center;
   margin-bottom: 1rem;
   padding: 0.75rem;
-  background: rgba(0, 212, 170, 0.05);
+  background: ${colors.surfaceBackground};
   border-radius: 6px;
-  border-left: 3px solid #00d4aa;
+  border-left: 3px solid ${colors.bullGreen};
   
   &:last-child {
     margin-bottom: 0;
@@ -213,8 +213,8 @@ const FlowItem = styled.div`
 `;
 
 const FlowNumber = styled.div`
-  background: #00d4aa;
-  color: #000;
+  background: ${colors.bullGreen};
+  color: ${colors.darkBackground};
   width: 24px;
   height: 24px;
   border-radius: 50%;
@@ -244,12 +244,12 @@ const FeatureItem = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #b0b0b0;
+  color: ${colors.textSecondary};
   font-size: 14px;
 `;
 
 const FeatureIcon = styled.div`
-  color: #00d4aa;
+  color: ${colors.bullGreen};
   font-size: 12px;
 `;
 
