@@ -35,11 +35,19 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def get_password_hash(password: str) -> str:
     """Hash a password. Truncate to 72 bytes to avoid bcrypt error."""
-    # bcrypt has a 72-byte limit; truncate the password if needed
-    password_bytes = password.encode('utf-8')
-    if len(password_bytes) > 72:
-        password = password_bytes[:72].decode('utf-8', errors='ignore')
-    return pwd_context.hash(password)
+    # bcrypt has a 72-byte limit; always truncate the password to be safe
+    password_bytes = password.encode('utf-8')[:72]
+    password_truncated = password_bytes.decode('utf-8', errors='ignore')
+    
+    try:
+        return pwd_context.hash(password_truncated)
+    except ValueError as e:
+        # If still getting 72-byte error, force manual bcrypt hash
+        if '72 bytes' in str(e):
+            import bcrypt
+            salt = bcrypt.gensalt(rounds=12)
+            return bcrypt.hashpw(password_truncated.encode('utf-8'), salt).decode('utf-8')
+        raise
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """Create a JWT access token."""
