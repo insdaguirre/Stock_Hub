@@ -11,7 +11,15 @@ const inferProdBase = () => {
   } catch (_) {}
   return 'http://localhost:8000/api';
 };
-export const BASE_URL = process.env.REACT_APP_API_BASE_URL || inferProdBase();
+// Normalize base so it always includes the `/api` suffix and no trailing slash
+const resolveBaseUrl = () => {
+  const raw = (process.env.REACT_APP_API_BASE_URL || inferProdBase()).trim();
+  // Remove any trailing slash
+  const withoutTrailing = raw.endsWith('/') ? raw.slice(0, -1) : raw;
+  // If it already ends with /api, keep it; otherwise append
+  return withoutTrailing.endsWith('/api') ? withoutTrailing : `${withoutTrailing}/api`;
+};
+export const BASE_URL = resolveBaseUrl();
 
 // Helper function to get auth headers
 const getAuthHeaders = () => {
@@ -228,7 +236,8 @@ export const getTimeSeries = async (symbol, range = '1M') => {
 export const getTickerData = async (symbol) => {
   try {
     console.log(`Fetching data for ${symbol} from backend API...`);
-    const response = await fetch(`${BASE_URL}/timeseries/${symbol}?range=5d&v=${Date.now()}`);
+    // Use 1W range for a reliable last 5 trading days series
+    const response = await fetch(`${BASE_URL}/timeseries/${symbol}?range=1W&v=${Date.now()}`);
     console.log(`Response status for ${symbol}:`, response.status);
     
     if (!response.ok) {
@@ -243,9 +252,16 @@ export const getTickerData = async (symbol) => {
     }
     
     // Convert to our expected format
-    const points = data.points.map(point => ({
-      timestamp: new Date(point.date).toISOString(),
-      close: parseFloat(point.price)
+    // Keep only the last 5 closed trading days
+    const normalized = data.points.map(point => ({
+      date: new Date(point.date),
+      price: parseFloat(point.price)
+    })).filter(p => !isNaN(p.date.getTime()) && isFinite(p.price));
+
+    const sliced = normalized.slice(-5);
+    const points = sliced.map(p => ({
+      timestamp: p.date.toISOString(),
+      close: p.price
     }));
     
     console.log(`Processed ${symbol}:`, points.length, 'points');
