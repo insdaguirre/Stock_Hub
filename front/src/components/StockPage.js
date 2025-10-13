@@ -204,11 +204,14 @@ const StockPage = () => { //Defines StockPage as a functional react component
   };
 
   useEffect(() => {
+    let clearFn = null;
+    
     const fetchData = async () => {
       try {
         setLoading(true);
         
         const clearProgressSimulation = simulateProgress();
+        clearFn = clearProgressSimulation;
         
         const [stockResponse, predictionResponse] = await Promise.all([
           getStockData(symbol),
@@ -225,7 +228,6 @@ const StockPage = () => { //Defines StockPage as a functional react component
           setLoading(false);
         }, 500);
         
-        return clearProgressSimulation;
       } catch (err) {
         setError('Failed to fetch data. Please try again later.');
         console.error('Error:', err);
@@ -233,10 +235,12 @@ const StockPage = () => { //Defines StockPage as a functional react component
       }
     };
 
-    const clearFn = fetchData();
+    fetchData();
     
     return () => {
-      if (clearFn) clearFn();
+      if (clearFn && typeof clearFn === 'function') {
+        clearFn();
+      }
     };
   }, [symbol]);
 
