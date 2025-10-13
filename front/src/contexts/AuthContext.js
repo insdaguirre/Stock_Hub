@@ -134,6 +134,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const isAuthenticated = () => {
+    console.log('AuthContext - isAuthenticated check:', { token: !!token, user: !!user, loading });
     return !!token && !!user;
   };
 
