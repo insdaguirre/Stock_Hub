@@ -580,7 +580,7 @@ def calculate_prediction(prices, days_ahead=1):
 @app.get("/")
 async def root():
     REQUEST_COUNT.labels(route='/', status='200').inc()
-    return {"status": "API is running", "message": "Hello from Stock Hub API!"}
+    return {"status": "API is running", "message": "Hello from Stock Hub API!", "cors": "enabled"}
 
 @app.get("/api/predictions/{symbol}")
 async def get_predictions(symbol: str, current_user: User = Depends(get_current_active_user)):
