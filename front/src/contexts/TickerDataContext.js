@@ -1,5 +1,5 @@
 // src/contexts/TickerDataContext.js
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { getTickersBatch } from '../services/api';
 
 const TickerDataContext = createContext();

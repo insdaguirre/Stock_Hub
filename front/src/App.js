@@ -47,7 +47,13 @@ function App() {
               <DevPage />
             </PageLayout>
           } />
-          <Route path="/stock/:symbol" element={<StockPage />} />
+          <Route path="/stock/:symbol" element={
+            <ProtectedRoute>
+              <PageLayout>
+                <StockPage />
+              </PageLayout>
+            </ProtectedRoute>
+          } />
         </Routes>
         <ToastContainer />
       </AuthProvider>

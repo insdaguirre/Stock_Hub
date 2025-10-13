@@ -192,7 +192,7 @@ const CacheInfo = styled.div`
 `;
 
 const MarketOverview = () => {
-  const { tickerData, loading, error, cacheInfo, fetchTickerData } = useTickerData();
+  const { tickerData, loading, cacheInfo, fetchTickerData } = useTickerData();
   const [tickers] = useState([
     'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 
     'META', 'NFLX', 'AMD', 'INTC', 'ORCL', 'CRM'

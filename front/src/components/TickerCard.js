@@ -6,6 +6,7 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis } from 'recharts';
 import { FaArrowUp, FaArrowDown, FaExternalLinkAlt } from 'react-icons/fa';
 import { getTickerData } from '../services/api';
 import { requestQueue } from '../utils/requestQueue';
+import { useAuth } from '../contexts/AuthContext';
 import colors, { getPerformanceColor } from '../styles/colors';
 
 const CardContainer = styled.div`
@@ -184,6 +185,7 @@ const TickerCard = ({ symbol, onError, tickerData }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
     // If tickerData is provided (from context), use it directly
@@ -251,7 +253,14 @@ const TickerCard = ({ symbol, onError, tickerData }) => {
   }, [symbol, onError, tickerData]);
 
   const handleClick = () => {
-    navigate(`/stock/${symbol}`);
+    if (isAuthenticated()) {
+      navigate(`/stock/${symbol}`);
+    } else {
+      // Redirect to login with return URL
+      navigate('/login', { 
+        state: { from: `/stock/${symbol}` } 
+      });
+    }
   };
 
   const priceChange = data ? data.currentPrice - data.previousPrice : 0;

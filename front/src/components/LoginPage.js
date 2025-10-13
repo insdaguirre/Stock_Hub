@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import styled from 'styled-components';
 import { useAuth } from '../contexts/AuthContext';
 import colors from '../styles/colors';
@@ -150,6 +150,10 @@ const LoginPage = () => {
   
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Get the intended destination from state, default to /predict
+  const from = location.state?.from || '/predict';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -159,7 +163,8 @@ const LoginPage = () => {
     const result = await login(usernameOrEmail, password);
     
     if (result.success) {
-      navigate('/predict');
+      // Redirect to the intended destination or default to /predict
+      navigate(from, { replace: true });
     } else {
       setError(result.error);
     }
@@ -171,7 +176,7 @@ const LoginPage = () => {
     <PageContainer>
       <LoginCard>
         <Title>Welcome Back</Title>
-        <Subtitle>Sign in to access predictions</Subtitle>
+        <Subtitle>Sign in to access your account</Subtitle>
         
         <Form onSubmit={handleSubmit}>
           <InputGroup>
