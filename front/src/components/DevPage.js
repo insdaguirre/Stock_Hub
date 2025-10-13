@@ -2,6 +2,7 @@
 import React from 'react';
 import styled from 'styled-components';
 import { FaGithub, FaDatabase, FaServer, FaCloud, FaChartLine, FaCog, FaArrowRight } from 'react-icons/fa';
+import ChipMatrixBackground from './ChipMatrixBackground';
 import colors from '../styles/colors';
 
 const PageContainer = styled.div`
@@ -10,6 +11,8 @@ const PageContainer = styled.div`
   color: ${colors.textPrimary};
   display: flex;
   flex-direction: column;
+  position: relative;
+  overflow-x: hidden;
 `;
 
 const MainContent = styled.div`
@@ -18,6 +21,8 @@ const MainContent = styled.div`
   margin: 0 auto;
   padding: 2rem;
   width: 100%;
+  position: relative;
+  z-index: 1;
 `;
 
 const Header = styled.div`
@@ -257,6 +262,7 @@ const FeatureIcon = styled.div`
 const DevPage = () => {
   return (
     <PageContainer>
+      <ChipMatrixBackground />
       <MainContent>
         <Header>
           <Title>Dev</Title>
