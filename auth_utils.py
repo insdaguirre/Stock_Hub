@@ -14,8 +14,12 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Password hashing - bcrypt has a 72 byte limit, so we configure it to truncate
+pwd_context = CryptContext(
+    schemes=["bcrypt"],
+    deprecated="auto",
+    bcrypt__truncate_error=False  # Don't raise error, just truncate to 72 bytes
+)
 
 # JWT settings
 SECRET_KEY = os.getenv("JWT_SECRET", "your-secret-key-change-this-in-production")
