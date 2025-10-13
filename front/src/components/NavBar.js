@@ -30,15 +30,20 @@ const Logo = styled.div`
   align-items: center;
   cursor: pointer;
   transition: all 0.3s ease;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: ${props => props.active ? colors.hover : 'transparent'};
+  border: ${props => props.active ? `1px solid ${colors.bullGreen}` : '1px solid transparent'};
   
   &:hover {
     transform: translateY(-2px);
+    background: ${colors.hover};
   }
 `;
 
 const LogoIcon = styled.div`
   background: ${colors.cardBackground};
-  color: ${colors.bullGreen};
+  color: ${props => props.active ? colors.bullGreen : colors.bullGreen};
   width: 40px;
   height: 40px;
   border-radius: 6px;
@@ -48,16 +53,18 @@ const LogoIcon = styled.div`
   font-weight: bold;
   font-size: 18px;
   margin-right: 12px;
-  border: 1px solid ${colors.border};
+  border: 1px solid ${props => props.active ? colors.bullGreen : colors.border};
   box-shadow: 0 2px 4px ${colors.shadowLight};
+  transition: all 0.2s ease;
 `;
 
 const LogoText = styled.h1`
   font-size: 24px;
   font-weight: 700;
-  color: ${colors.textPrimary};
+  color: ${props => props.active ? colors.bullGreen : colors.textPrimary};
   margin: 0;
   letter-spacing: -0.5px;
+  transition: color 0.2s ease;
 `;
 
 const NavLinks = styled.div`
@@ -154,19 +161,17 @@ const NavBar = () => {
   return (
     <NavContainer>
       <NavContent>
-        <Logo onClick={() => navigate('/')}>
-          <LogoIcon>SH</LogoIcon>
-          <LogoText>StockHub</LogoText>
+        <Logo active={isActive('/')} onClick={() => navigate('/')}>
+          {isActive('/') && (
+            <IconWrapper style={{ color: colors.bullGreen, marginRight: '8px' }}>
+              <FaHome />
+            </IconWrapper>
+          )}
+          <LogoIcon active={isActive('/')}>SH</LogoIcon>
+          <LogoText active={isActive('/')}>StockHub</LogoText>
         </Logo>
         
         <NavLinks>
-          <NavLink 
-            active={isActive('/')} 
-            onClick={() => navigate('/')}
-          >
-            <IconWrapper><FaHome /></IconWrapper>
-            Hub
-          </NavLink>
           <NavLink 
             active={isActive('/predict')} 
             onClick={() => navigate('/predict')}
