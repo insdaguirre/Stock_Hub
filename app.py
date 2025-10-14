@@ -462,7 +462,9 @@ def fetch_stock_data(symbol, full: bool = False):
     t0 = time.perf_counter()
     
     if not polygon_client:
-        raise HTTPException(status_code=503, detail="Polygon.io client not available")
+        error_msg = "Polygon.io client not available - POLYGON_API_KEY not set"
+        print(json.dumps({"route": "polygon_daily", "symbol": symbol, "error": error_msg}))
+        raise Exception(error_msg)
     
     # Check rate limit
     if polygon_rate_limit():
@@ -560,7 +562,9 @@ def fetch_global_quote(symbol):
     t0 = time.perf_counter()
     
     if not polygon_client:
-        raise HTTPException(status_code=503, detail="Polygon.io client not available")
+        error_msg = "Polygon.io client not available - POLYGON_API_KEY not set"
+        print(json.dumps({"route": "polygon_quote", "symbol": symbol, "error": error_msg}))
+        raise Exception(error_msg)
     
     # Check rate limit
     if polygon_rate_limit():
@@ -625,7 +629,15 @@ def fetch_intraday(symbol: str, interval: str = '5m'):
     t0 = time.perf_counter()
     
     if not polygon_client:
-        raise HTTPException(status_code=503, detail="Polygon.io client not available")
+        error_msg = "Polygon.io client not available - POLYGON_API_KEY not set"
+        print(json.dumps({"route": "polygon_intraday", "symbol": symbol, "error": error_msg}))
+        # Return empty result for intraday instead of raising (chart can handle empty data)
+        last_closed = get_last_closed_trading_day()
+        return {
+            "points": [],
+            "market": "closed",
+            "asOf": last_closed.replace(hour=16, minute=0, second=0).isoformat()
+        }
     
     # Check rate limit
     if polygon_rate_limit():
@@ -1191,7 +1203,9 @@ def fetch_overview(symbol: str):
     t0 = time.perf_counter()
     
     if not polygon_client:
-        raise HTTPException(status_code=503, detail="Polygon.io client not available")
+        error_msg = "Polygon.io client not available - POLYGON_API_KEY not set"
+        print(json.dumps({"route": "polygon_overview", "symbol": symbol, "error": error_msg}))
+        raise Exception(error_msg)
     
     # Check rate limit
     if polygon_rate_limit():
