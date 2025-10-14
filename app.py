@@ -462,9 +462,7 @@ def fetch_stock_data(symbol, full: bool = False):
     t0 = time.perf_counter()
     
     if not polygon_client:
-        error_msg = "Polygon.io client not available - POLYGON_API_KEY not set"
-        print(json.dumps({"route": "polygon_daily", "symbol": symbol, "error": error_msg}))
-        raise Exception(error_msg)
+        raise HTTPException(status_code=503, detail="Polygon.io client not available")
     
     # Check rate limit
     if polygon_rate_limit():
@@ -510,13 +508,16 @@ def fetch_stock_data(symbol, full: bool = False):
             adjusted=True
         )
         
-        if not aggs or not aggs.results:
+        # Convert to list if it's an iterator
+        aggs_list = list(aggs) if aggs else []
+        
+        if not aggs_list:
             raise Exception(f"No data available for {symbol}")
         
         historical_data = []
         
         # Convert to required format and clamp to last closed day
-        for result in aggs.results:
+        for result in aggs_list:
             # Convert timestamp to date
             dt = datetime.fromtimestamp(result.timestamp / 1000, tz=ZoneInfo('America/New_York'))
             date_str = dt.strftime('%Y-%m-%d')
@@ -562,9 +563,7 @@ def fetch_global_quote(symbol):
     t0 = time.perf_counter()
     
     if not polygon_client:
-        error_msg = "Polygon.io client not available - POLYGON_API_KEY not set"
-        print(json.dumps({"route": "polygon_quote", "symbol": symbol, "error": error_msg}))
-        raise Exception(error_msg)
+        raise HTTPException(status_code=503, detail="Polygon.io client not available")
     
     # Check rate limit
     if polygon_rate_limit():
@@ -584,17 +583,20 @@ def fetch_global_quote(symbol):
         # Get previous close from Polygon
         prev_close_data = polygon_client.get_previous_close_agg(ticker=symbol)
         
-        if not prev_close_data or not prev_close_data.results:
+        # Convert to list if it's an iterator
+        results_list = list(prev_close_data) if prev_close_data else []
+        
+        if not results_list:
             raise Exception("No previous close data available")
         
         # Get the most recent result
-        result = prev_close_data.results[0]
+        result = results_list[0]
         price = float(result.close)
         prev_close = float(result.close)  # For previous close, we use the same value
         
         # Try to get a second result for actual previous close
-        if len(prev_close_data.results) > 1:
-            prev_result = prev_close_data.results[1]
+        if len(results_list) > 1:
+            prev_result = results_list[1]
             prev_close = float(prev_result.close)
         
         if price <= 0 or prev_close <= 0:
@@ -629,15 +631,7 @@ def fetch_intraday(symbol: str, interval: str = '5m'):
     t0 = time.perf_counter()
     
     if not polygon_client:
-        error_msg = "Polygon.io client not available - POLYGON_API_KEY not set"
-        print(json.dumps({"route": "polygon_intraday", "symbol": symbol, "error": error_msg}))
-        # Return empty result for intraday instead of raising (chart can handle empty data)
-        last_closed = get_last_closed_trading_day()
-        return {
-            "points": [],
-            "market": "closed",
-            "asOf": last_closed.replace(hour=16, minute=0, second=0).isoformat()
-        }
+        raise HTTPException(status_code=503, detail="Polygon.io client not available")
     
     # Check rate limit
     if polygon_rate_limit():
@@ -676,13 +670,16 @@ def fetch_intraday(symbol: str, interval: str = '5m'):
             adjusted=True
         )
         
-        if not aggs or not aggs.results:
+        # Convert to list if it's an iterator
+        aggs_list = list(aggs) if aggs else []
+        
+        if not aggs_list:
             raise Exception(f"No intraday data available for {symbol}")
         
         points = []
         
         # Filter to the specific closed trading day, session hours 9:30-16:00 ET
-        for result in aggs.results:
+        for result in aggs_list:
             # Convert timestamp to ET timezone
             dt = datetime.fromtimestamp(result.timestamp / 1000, tz=et)
             
@@ -1203,9 +1200,7 @@ def fetch_overview(symbol: str):
     t0 = time.perf_counter()
     
     if not polygon_client:
-        error_msg = "Polygon.io client not available - POLYGON_API_KEY not set"
-        print(json.dumps({"route": "polygon_overview", "symbol": symbol, "error": error_msg}))
-        raise Exception(error_msg)
+        raise HTTPException(status_code=503, detail="Polygon.io client not available")
     
     # Check rate limit
     if polygon_rate_limit():
@@ -1239,6 +1234,9 @@ def fetch_overview(symbol: str):
             adjusted=True
         )
         
+        # Convert to list if it's an iterator
+        aggs_list = list(aggs) if aggs else []
+        
         # Extract metrics from Polygon data
         result = {
             "marketCap": _format_number(ticker_details.market_cap) if hasattr(ticker_details, 'market_cap') else None,
@@ -1248,11 +1246,11 @@ def fetch_overview(symbol: str):
             "dividendYield": _format_number(ticker_details.dividend_yield) if hasattr(ticker_details, 'dividend_yield') else None,
             "fiftyTwoWeekHigh": _format_number(ticker_details.high_52_week) if hasattr(ticker_details, 'high_52_week') else None,
             "fiftyTwoWeekLow": _format_number(ticker_details.low_52_week) if hasattr(ticker_details, 'low_52_week') else None,
-            "open": _format_number(aggs.results[-1].open) if aggs and aggs.results else None,
-            "high": _format_number(aggs.results[-1].high) if aggs and aggs.results else None,
-            "low": _format_number(aggs.results[-1].low) if aggs and aggs.results else None,
-            "prevClose": _format_number(aggs.results[-1].close) if aggs and aggs.results else None,
-            "volume": _format_number(aggs.results[-1].volume) if aggs and aggs.results else None,
+            "open": _format_number(aggs_list[-1].open) if aggs_list else None,
+            "high": _format_number(aggs_list[-1].high) if aggs_list else None,
+            "low": _format_number(aggs_list[-1].low) if aggs_list else None,
+            "prevClose": _format_number(aggs_list[-1].close) if aggs_list else None,
+            "volume": _format_number(aggs_list[-1].volume) if aggs_list else None,
             "name": getattr(ticker_details, 'name', symbol.upper()),
             "currency": getattr(ticker_details, 'currency', 'USD')
         }
