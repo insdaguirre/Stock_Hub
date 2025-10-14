@@ -1003,7 +1003,7 @@ useEffect(() => {
             Due to data pricing, charts display data up to the last closed market day.
           </DisclaimerText>
           <RangeTabs>
-            {['1D','1W','1M','3M','6M','YTD','1Y','2Y','5Y','10Y'].map(r => (
+            {['1D','1W','1M','3M','6M','YTD','1Y','2Y'].map(r => (
               <RangeTab key={r} active={range === r} onClick={async () => {
                 setRange(r);
                 // For 1D when market is open, always fetch fresh data
@@ -1112,7 +1112,7 @@ useEffect(() => {
                             if (range === '1D') {
                               return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                             }
-                            if (['YTD','1Y','2Y','5Y','10Y'].includes(range)) {
+                            if (['YTD','1Y','2Y'].includes(range)) {
                               return d.toLocaleDateString([], { month: '2-digit', day: '2-digit', year: '2-digit' });
                             }
                             return d.toLocaleDateString([], { month: '2-digit', day: '2-digit' });

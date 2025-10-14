@@ -34,11 +34,7 @@ from auth_utils import (
     get_user_by_username,
     get_user_by_email
 )
-import yfinance as yf
-
-# Temporarily disable yfinance's use of requests_cache for better compatibility
-import os
-os.environ['YF_CACHE_DISABLED'] = '1'
+from polygon import RESTClient
 
 # Prometheus metrics
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
@@ -109,11 +105,12 @@ app.add_middleware(RequestIdMiddleware)
 logger = logging.getLogger("stockhub")
 logging.basicConfig(level=logging.INFO)
 
-# Get Alpha Vantage API key from environment variables
+# Get API keys from environment variables
 ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY')
 MODEL_VERSION = os.getenv('MODEL_VERSION', 'v1')
 ADMIN_API_KEY = os.getenv('ADMIN_API_KEY')
 FINNHUB_API_KEY = os.getenv('FINNHUB_API_KEY')
+POLYGON_API_KEY = os.getenv('POLYGON_API_KEY')
 
 # Redis
 REDIS_URL = os.getenv('REDIS_URL')
@@ -132,6 +129,14 @@ if redis_client:
         job_queue = Queue('default', connection=redis.Redis.from_url(REDIS_URL))
     except Exception:
         job_queue = None
+
+# Polygon.io client
+polygon_client = None
+if POLYGON_API_KEY:
+    try:
+        polygon_client = RESTClient(api_key=POLYGON_API_KEY)
+    except Exception:
+        polygon_client = None
 
 def _cache_get(key: str):
     if not redis_client:
@@ -166,6 +171,29 @@ def _throttle(symbol: str, window_seconds: int = 5):
         return False
     except Exception:
         return
+
+def polygon_rate_limit():
+    """Enforce 5 calls per minute rate limit using Redis sliding window"""
+    if not redis_client or not polygon_client:
+        return False
+    
+    try:
+        # Get current minute timestamp
+        current_minute = int(time.time() // 60)
+        key = f"polygon:rate:{current_minute}"
+        
+        # Increment counter for this minute
+        count = redis_client.incr(key)
+        redis_client.expire(key, 60)  # Expire after 1 minute
+        
+        if count > 5:
+            print(json.dumps({"route": "polygon_rate_limit", "rate_limited": True, "count": count}))
+            return True
+        
+        return False
+    except Exception as e:
+        print(json.dumps({"route": "polygon_rate_limit", "error": str(e)}))
+        return False
 
 def is_market_hours() -> bool:
     """Check if US stock market is currently open"""
@@ -427,66 +455,75 @@ def fetch_news(symbol: Optional[str] = None, limit: int = 6):
     return articles[:limit]
 
 def fetch_stock_data(symbol, full: bool = False):
-    """Fetch historical daily stock data using yfinance, clamped to last closed trading day.
-    When full=True, fetches more historical data (10 years vs 100 days).
+    """Fetch historical daily stock data using Polygon.io, clamped to last closed trading day.
+    When full=True, fetches more historical data (2 years max).
     Returns [{date: YYYY-MM-DD, price: float}] sorted by date.
     """
     t0 = time.perf_counter()
+    
+    if not polygon_client:
+        raise HTTPException(status_code=503, detail="Polygon.io client not available")
+    
+    # Check rate limit
+    if polygon_rate_limit():
+        raise HTTPException(status_code=429, detail="Rate limit exceeded (5 calls/min)")
     
     # Get last closed trading day for clamping
     last_closed = get_last_closed_trading_day()
     closed_date_str = last_closed.strftime('%Y-%m-%d')
     
     # Cache key includes date for auto-invalidation
-    cache_key = f"yf:daily:{'full' if full else 'compact'}:{symbol}:{closed_date_str}"
+    cache_key = f"polygon:daily:{'full' if full else 'compact'}:{symbol}:{closed_date_str}"
     cached = _cache_get(cache_key)
     if cached:
         try:
             payload = json.loads(cached)
             if isinstance(payload, list) and payload:
-                print(json.dumps({"route": "yf_daily", "symbol": symbol, "cache_hit": True, "date": closed_date_str, "latency_ms": int((time.perf_counter()-t0)*1000)}))
+                print(json.dumps({"route": "polygon_daily", "symbol": symbol, "cache_hit": True, "date": closed_date_str, "latency_ms": int((time.perf_counter()-t0)*1000)}))
                 return payload
         except Exception:
             pass
     
     try:
-        # Use yfinance download() which is often more reliable than Ticker().history()
+        # Calculate date range - max 2 years for Polygon.io
         end_date = last_closed + timedelta(days=1)  # End date exclusive
         if full:
-            # Full history: 10 years
-            start_date = end_date - timedelta(days=365*10)
+            # Full history: 2 years max
+            start_date = end_date - timedelta(days=365*2)
         else:
             # Compact: ~100 days  
             start_date = end_date - timedelta(days=100)
         
-        # Download historical data
-        hist = yf.download(symbol, start=start_date, end=end_date, progress=False, show_errors=False)
+        # Format dates for Polygon API
+        from_date = start_date.strftime('%Y-%m-%d')
+        to_date = end_date.strftime('%Y-%m-%d')
         
-        # If empty, try with period as fallback
-        if hist.empty:
-            period = '10y' if full else '3mo'
-            hist = yf.download(symbol, period=period, progress=False, show_errors=False)
+        # Fetch daily aggregates from Polygon
+        aggs = polygon_client.get_aggs(
+            ticker=symbol,
+            multiplier=1,
+            timespan="day",
+            from_=from_date,
+            to=to_date,
+            adjusted=True
+        )
         
-        if hist.empty:
+        if not aggs or not aggs.results:
             raise Exception(f"No data available for {symbol}")
         
         historical_data = []
         
         # Convert to required format and clamp to last closed day
-        for idx, row in hist.iterrows():
-            # Get date (handle both timezone-aware and naive)
-            if idx.tz is not None:
-                dt = idx.tz_convert(ZoneInfo('America/New_York'))
-            else:
-                dt = idx.replace(tzinfo=ZoneInfo('America/New_York'))
-            
+        for result in aggs.results:
+            # Convert timestamp to date
+            dt = datetime.fromtimestamp(result.timestamp / 1000, tz=ZoneInfo('America/New_York'))
             date_str = dt.strftime('%Y-%m-%d')
             
             # Only include data up to and including last closed trading day
             if date_str <= closed_date_str:
                 historical_data.append({
                     'date': date_str,
-                    'price': float(row['Close'])
+                    'price': float(result.close)
                 })
         
         # Sort by date
@@ -497,7 +534,7 @@ def fetch_stock_data(symbol, full: bool = False):
         _cache_set(cache_key, json.dumps(historical_data), ttl_seconds=ttl)
         
         print(json.dumps({
-            "route": "yf_daily",
+            "route": "polygon_daily",
             "symbol": symbol,
             "cache_hit": False,
             "date": closed_date_str,
@@ -509,7 +546,7 @@ def fetch_stock_data(symbol, full: bool = False):
         
     except Exception as e:
         print(json.dumps({
-            "route": "yf_daily",
+            "route": "polygon_daily",
             "symbol": symbol,
             "error": str(e),
             "latency_ms": int((time.perf_counter()-t0)*1000)
@@ -517,42 +554,44 @@ def fetch_stock_data(symbol, full: bool = False):
         raise HTTPException(status_code=500, detail=f"Failed to fetch stock data: {str(e)}")
 
 def fetch_global_quote(symbol):
-    """Fetch current price and previous close using yfinance.
+    """Fetch current price and previous close using Polygon.io.
     Returns (price, previousClose) tuple.
     """
     t0 = time.perf_counter()
-    cache_key = f"yf:quote:{symbol}"
+    
+    if not polygon_client:
+        raise HTTPException(status_code=503, detail="Polygon.io client not available")
+    
+    # Check rate limit
+    if polygon_rate_limit():
+        raise HTTPException(status_code=429, detail="Rate limit exceeded (5 calls/min)")
+    
+    cache_key = f"polygon:quote:{symbol}"
     cached = _cache_get(cache_key)
     if cached:
         try:
             js = json.loads(cached)
-            print(json.dumps({"route": "yf_quote", "symbol": symbol, "cache_hit": True, "latency_ms": int((time.perf_counter()-t0)*1000)}))
+            print(json.dumps({"route": "polygon_quote", "symbol": symbol, "cache_hit": True, "latency_ms": int((time.perf_counter()-t0)*1000)}))
             return float(js['price']), float(js['previousClose'])
         except Exception:
             pass
     
     try:
-        ticker = yf.Ticker(symbol)
-        info = ticker.info
+        # Get previous close from Polygon
+        prev_close_data = polygon_client.get_previous_close_agg(ticker=symbol)
         
-        # Get current price (or last close if market closed)
-        price = info.get('currentPrice') or info.get('regularMarketPrice') or info.get('previousClose', 0)
+        if not prev_close_data or not prev_close_data.results:
+            raise Exception("No previous close data available")
         
-        # Get previous close
-        prev_close = info.get('previousClose', 0)
+        # Get the most recent result
+        result = prev_close_data.results[0]
+        price = float(result.close)
+        prev_close = float(result.close)  # For previous close, we use the same value
         
-        if not price or not prev_close:
-            # Fallback: use recent history
-            hist = ticker.history(period='5d')
-            if not hist.empty:
-                price = float(hist['Close'].iloc[-1])
-                if len(hist) > 1:
-                    prev_close = float(hist['Close'].iloc[-2])
-                else:
-                    prev_close = price
-        
-        price = float(price)
-        prev_close = float(prev_close)
+        # Try to get a second result for actual previous close
+        if len(prev_close_data.results) > 1:
+            prev_result = prev_close_data.results[1]
+            prev_close = float(prev_result.close)
         
         if price <= 0 or prev_close <= 0:
             raise Exception("Invalid price data")
@@ -561,7 +600,7 @@ def fetch_global_quote(symbol):
         _cache_set(cache_key, json.dumps({"price": price, "previousClose": prev_close}), ttl_seconds=10 * 60)
         
         print(json.dumps({
-            "route": "yf_quote",
+            "route": "polygon_quote",
             "symbol": symbol,
             "cache_hit": False,
             "latency_ms": int((time.perf_counter()-t0)*1000)
@@ -571,7 +610,7 @@ def fetch_global_quote(symbol):
         
     except Exception as e:
         print(json.dumps({
-            "route": "yf_quote",
+            "route": "polygon_quote",
             "symbol": symbol,
             "error": str(e),
             "latency_ms": int((time.perf_counter()-t0)*1000)
@@ -580,22 +619,29 @@ def fetch_global_quote(symbol):
 
 
 def fetch_intraday(symbol: str, interval: str = '5m'):
-    """Fetch intraday 5-minute data for the last closed trading day using yfinance.
+    """Fetch intraday 5-minute data for the last closed trading day using Polygon.io.
     Returns {points: [{time: HH:MM, price: float, date: ISO}], market: 'closed', asOf: ISO}
     """
     t0 = time.perf_counter()
+    
+    if not polygon_client:
+        raise HTTPException(status_code=503, detail="Polygon.io client not available")
+    
+    # Check rate limit
+    if polygon_rate_limit():
+        raise HTTPException(status_code=429, detail="Rate limit exceeded (5 calls/min)")
     
     # Get last closed trading day
     last_closed = get_last_closed_trading_day()
     closed_date_str = last_closed.strftime('%Y-%m-%d')
     
     # Cache key includes the date for auto-invalidation
-    cache_key = f"yf:intraday:5m:{symbol}:{closed_date_str}"
+    cache_key = f"polygon:intraday:5m:{symbol}:{closed_date_str}"
     cached = _cache_get(cache_key)
     if cached:
         try:
             payload = json.loads(cached)
-            print(json.dumps({"route": "yf_intraday", "symbol": symbol, "cache_hit": True, "date": closed_date_str, "latency_ms": int((time.perf_counter()-t0)*1000)}))
+            print(json.dumps({"route": "polygon_intraday", "symbol": symbol, "cache_hit": True, "date": closed_date_str, "latency_ms": int((time.perf_counter()-t0)*1000)}))
             return payload
         except Exception:
             pass
@@ -604,24 +650,29 @@ def fetch_intraday(symbol: str, interval: str = '5m'):
     
     try:
         # Fetch 5-minute intraday data for the last closed trading day
-        ticker = yf.Ticker(symbol)
+        # Get data for the specific closed trading day
+        start_date = last_closed.strftime('%Y-%m-%d')
+        end_date = (last_closed + timedelta(days=1)).strftime('%Y-%m-%d')
         
-        # Get data for a 2-day window to ensure we capture the full day
-        start_date = last_closed - timedelta(days=1)
-        end_date = last_closed + timedelta(days=1)
+        # Fetch 5-minute aggregates from Polygon
+        aggs = polygon_client.get_aggs(
+            ticker=symbol,
+            multiplier=5,
+            timespan="minute",
+            from_=start_date,
+            to=end_date,
+            adjusted=True
+        )
         
-        hist = ticker.history(start=start_date, end=end_date, interval='5m')
-        
-        if hist.empty:
-            # Fallback: try getting 1 day of data
-            hist = ticker.history(period='1d', interval='5m')
+        if not aggs or not aggs.results:
+            raise Exception(f"No intraday data available for {symbol}")
         
         points = []
         
         # Filter to the specific closed trading day, session hours 9:30-16:00 ET
-        for idx, row in hist.iterrows():
-            # Convert index to ET timezone
-            dt = idx.tz_convert(et) if idx.tz is not None else idx.replace(tzinfo=et)
+        for result in aggs.results:
+            # Convert timestamp to ET timezone
+            dt = datetime.fromtimestamp(result.timestamp / 1000, tz=et)
             
             # Only include data from the last closed trading day
             if dt.date() != last_closed.date():
@@ -631,7 +682,7 @@ def fetch_intraday(symbol: str, interval: str = '5m'):
             if dt.hour < 9 or (dt.hour == 9 and dt.minute < 30) or dt.hour >= 16:
                 continue
             
-            price = float(row['Close'])
+            price = float(result.close)
             points.append({
                 "time": dt.strftime('%H:%M'),
                 "price": price,
@@ -653,7 +704,7 @@ def fetch_intraday(symbol: str, interval: str = '5m'):
         _cache_set(cache_key, json.dumps(result), ttl_seconds=ttl)
         
         print(json.dumps({
-            "route": "yf_intraday",
+            "route": "polygon_intraday",
             "symbol": symbol,
             "cache_hit": False,
             "date": closed_date_str,
@@ -665,7 +716,7 @@ def fetch_intraday(symbol: str, interval: str = '5m'):
         
     except Exception as e:
         print(json.dumps({
-            "route": "yf_intraday",
+            "route": "polygon_intraday",
             "symbol": symbol,
             "error": str(e),
             "latency_ms": int((time.perf_counter()-t0)*1000)
@@ -1042,19 +1093,27 @@ async def get_tickers_batch(symbols: str):
 
 @app.get("/api/timeseries/{symbol}")
 async def get_timeseries(symbol: str, range: str = '1M'):
-    """Return timeseries for charting using yfinance. 1D uses intraday; others use daily prices.
-    All data clamped to last closed trading day.
+    """Return timeseries for charting using Polygon.io. 1D uses intraday; others use daily prices.
+    All data clamped to last closed trading day. Max range is 2Y due to Polygon.io limits.
     Response: { points: [{date, price}], range }
     """
     try:
         symbol_u = symbol.upper()
+        
+        # Validate range - reject 5Y and 10Y as they exceed Polygon.io 2-year limit
+        valid_ranges = ['1D', '1W', '1M', '3M', '6M', 'YTD', '1Y', '2Y']
+        if range not in valid_ranges:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid range '{range}'. Valid ranges: {', '.join(valid_ranges)}. 5Y and 10Y not supported due to data limits."
+            )
         
         # Get last closed trading day for cache key
         last_closed = get_last_closed_trading_day()
         closed_date_str = last_closed.strftime('%Y-%m-%d')
         
         # Cache key includes date for auto-invalidation
-        cache_key = f"yf:timeseries:{symbol_u}:{range}:{closed_date_str}"
+        cache_key = f"polygon:timeseries:{symbol_u}:{range}:{closed_date_str}"
         
         # Use market-aware TTL
         ttl_seconds = get_smart_cache_ttl()
@@ -1076,9 +1135,9 @@ async def get_timeseries(symbol: str, range: str = '1M'):
             print(json.dumps({"route": "/api/timeseries", "symbol": symbol_u, "range": range, "cache_hit": False, "date": closed_date_str}))
             return result_1d
         
-        # For all other ranges: use daily data from yfinance
-        # Determine if we need full history
-        want_full = range in ['YTD', '1Y', '2Y', '5Y', '10Y']
+        # For all other ranges: use daily data from Polygon.io
+        # Determine if we need full history (2Y max for Polygon)
+        want_full = range in ['YTD', '1Y', '2Y']
         data = fetch_stock_data(symbol, full=want_full)
         
         # Compute start date for filtering
@@ -1100,8 +1159,6 @@ async def get_timeseries(symbol: str, range: str = '1M'):
                 'YTD': 180,
                 '1Y': 252,
                 '2Y': 504,
-                '5Y': 1260,
-                '10Y': 2520,
             }
             n = fallback_counts.get(range, 60)
             pts = data[-min(len(data), n):]
@@ -1128,43 +1185,62 @@ def _format_number(n):
 
 
 def fetch_overview(symbol: str):
-    """Get snapshot stats for the symbol using yfinance.
+    """Get snapshot stats for the symbol using Polygon.io.
     Returns dictionary with common fields.
     """
     t0 = time.perf_counter()
-    cache_key = f"yf:overview:{symbol.upper()}"
+    
+    if not polygon_client:
+        raise HTTPException(status_code=503, detail="Polygon.io client not available")
+    
+    # Check rate limit
+    if polygon_rate_limit():
+        raise HTTPException(status_code=429, detail="Rate limit exceeded (5 calls/min)")
+    
+    cache_key = f"polygon:overview:{symbol.upper()}"
     cached = _cache_get(cache_key)
     if cached:
         try:
             payload = json.loads(cached)
-            print(json.dumps({"route": "yf_overview", "symbol": symbol, "cache_hit": True, "latency_ms": int((time.perf_counter()-t0)*1000)}))
+            print(json.dumps({"route": "polygon_overview", "symbol": symbol, "cache_hit": True, "latency_ms": int((time.perf_counter()-t0)*1000)}))
             return payload
         except Exception:
             pass
     
     try:
-        ticker = yf.Ticker(symbol)
-        info = ticker.info
+        # Get ticker details from Polygon
+        ticker_details = polygon_client.get_ticker_details(symbol)
         
-        # Get recent history for OHLC data
-        hist = ticker.history(period='5d')
+        # Get recent daily data for OHLC
+        last_closed = get_last_closed_trading_day()
+        start_date = (last_closed - timedelta(days=5)).strftime('%Y-%m-%d')
+        end_date = (last_closed + timedelta(days=1)).strftime('%Y-%m-%d')
         
-        # Extract metrics from yfinance info
+        aggs = polygon_client.get_aggs(
+            ticker=symbol,
+            multiplier=1,
+            timespan="day",
+            from_=start_date,
+            to=end_date,
+            adjusted=True
+        )
+        
+        # Extract metrics from Polygon data
         result = {
-            "marketCap": _format_number(info.get('marketCap')),
-            "pe": _format_number(info.get('trailingPE') or info.get('forwardPE')),
-            "eps": _format_number(info.get('trailingEps')),
-            "beta": _format_number(info.get('beta')),
-            "dividendYield": _format_number(info.get('dividendYield')),
-            "fiftyTwoWeekHigh": _format_number(info.get('fiftyTwoWeekHigh')),
-            "fiftyTwoWeekLow": _format_number(info.get('fiftyTwoWeekLow')),
-            "open": _format_number(hist['Open'].iloc[-1]) if not hist.empty else None,
-            "high": _format_number(hist['High'].iloc[-1]) if not hist.empty else None,
-            "low": _format_number(hist['Low'].iloc[-1]) if not hist.empty else None,
-            "prevClose": _format_number(info.get('previousClose')),
-            "volume": _format_number(info.get('volume')),
-            "name": info.get('longName') or info.get('shortName') or symbol.upper(),
-            "currency": info.get('currency') or 'USD'
+            "marketCap": _format_number(ticker_details.market_cap) if hasattr(ticker_details, 'market_cap') else None,
+            "pe": _format_number(ticker_details.pe_ratio) if hasattr(ticker_details, 'pe_ratio') else None,
+            "eps": _format_number(ticker_details.earnings_per_share) if hasattr(ticker_details, 'earnings_per_share') else None,
+            "beta": _format_number(ticker_details.beta) if hasattr(ticker_details, 'beta') else None,
+            "dividendYield": _format_number(ticker_details.dividend_yield) if hasattr(ticker_details, 'dividend_yield') else None,
+            "fiftyTwoWeekHigh": _format_number(ticker_details.high_52_week) if hasattr(ticker_details, 'high_52_week') else None,
+            "fiftyTwoWeekLow": _format_number(ticker_details.low_52_week) if hasattr(ticker_details, 'low_52_week') else None,
+            "open": _format_number(aggs.results[-1].open) if aggs and aggs.results else None,
+            "high": _format_number(aggs.results[-1].high) if aggs and aggs.results else None,
+            "low": _format_number(aggs.results[-1].low) if aggs and aggs.results else None,
+            "prevClose": _format_number(aggs.results[-1].close) if aggs and aggs.results else None,
+            "volume": _format_number(aggs.results[-1].volume) if aggs and aggs.results else None,
+            "name": getattr(ticker_details, 'name', symbol.upper()),
+            "currency": getattr(ticker_details, 'currency', 'USD')
         }
         
         # Cache with 24-hour TTL
@@ -1172,18 +1248,18 @@ def fetch_overview(symbol: str):
         _cache_set(cache_key, json.dumps(result), ttl_seconds=ttl)
         
         print(json.dumps({
-            "route": "yf_overview",
+            "route": "polygon_overview",
             "symbol": symbol,
             "cache_hit": False,
             "latency_ms": int((time.perf_counter()-t0)*1000),
-            "source": "yfinance"
+            "source": "polygon"
         }))
         
         return result
         
     except Exception as e:
         print(json.dumps({
-            "route": "yf_overview",
+            "route": "polygon_overview",
             "symbol": symbol,
             "error": str(e),
             "latency_ms": int((time.perf_counter()-t0)*1000)
