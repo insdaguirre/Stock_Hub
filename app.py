@@ -200,20 +200,14 @@ def is_trading_day(date_str: str) -> bool:
         return False
 
 def get_last_closed_trading_day() -> datetime:
-    """Get the last closed trading day (previous trading day, skipping weekends)"""
+    """Get the last closed trading day (previous trading day, skipping weekends)
+    Always returns the most recent closed trading day (yesterday or before)
+    """
     et = ZoneInfo('America/New_York')
     now = datetime.now(et)
     
-    # If it's before market close today, use yesterday as base
-    # If it's after market close, use today as base
-    market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
-    
-    if now < market_close:
-        # Before close, use previous day
-        candidate = now - timedelta(days=1)
-    else:
-        # After close, use today
-        candidate = now
+    # Always use yesterday as the starting point to ensure we get a closed day
+    candidate = now - timedelta(days=1)
     
     # Go back until we find a weekday (Monday=0, Friday=4)
     while candidate.weekday() >= 5:  # Saturday=5, Sunday=6
@@ -452,18 +446,25 @@ def fetch_stock_data(symbol, full: bool = False):
             pass
     
     try:
+        # Create ticker with timeout
         ticker = yf.Ticker(symbol)
         
-        # Use start/end dates instead of period for more reliable fetching
+        # Use start/end dates for more reliable fetching
         end_date = last_closed + timedelta(days=1)  # End date exclusive
         if full:
             # Full history: 10 years
             start_date = end_date - timedelta(days=365*10)
         else:
-            # Compact: ~100 days
+            # Compact: ~100 days  
             start_date = end_date - timedelta(days=100)
         
-        hist = ticker.history(start=start_date, end=end_date)
+        # Try fetching with date range first
+        hist = ticker.history(start=start_date, end=end_date, timeout=15)
+        
+        # If empty, try with period as fallback
+        if hist.empty:
+            period = '10y' if full else '3mo'  # Use 3mo instead of 100d for better compatibility
+            hist = ticker.history(period=period, timeout=15)
         
         if hist.empty:
             raise Exception(f"No data available for {symbol}")
