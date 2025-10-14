@@ -13,6 +13,7 @@ This repository contains both the backend API and the demo frontend app, designe
 **Training**: Weekly automated training via Railway worker  
 **Storage**: AWS S3 for model artifacts and Redis for caching  
 **Deployment**: Railway with separate web and worker processes  
+**Authentication**: JWT-based user authentication with PostgreSQL database
 
 **⚠️ Data Bottleneck**: This project relies on free API tiers from Alpha Vantage and Finnhub. Errors may occur due to rate limits, especially during high-traffic periods. The system gracefully handles these limitations with fallback mechanisms and caching.
 
@@ -35,27 +36,37 @@ This repository contains both the backend API and the demo frontend app, designe
 
 ## System Overview
 
-### Information Flow Architecture
+### Railway Deployment Architecture
 
-The system processes data through multiple stages, from data ingestion to prediction delivery:
+The system is deployed on Railway with the following service architecture:
 
 ```mermaid
 flowchart TD
-    subgraph "Data Sources"
-        AV[Alpha Vantage API<br/>Primary Data Source]
-        FH[Finnhub API<br/>Secondary Data Source]
+    subgraph "Railway Services"
+        subgraph "Web Service"
+            WEB[FastAPI Web Server<br/>web-production-b6d2.up.railway.app<br/>Port 8000]
+        end
+        
+        subgraph "Worker Service"
+            WORKER[RQ Background Worker<br/>Model Training & Inference<br/>GitHub Deployed]
+        end
+        
+        subgraph "Trainer Service"
+            TRAINER[Weekly Model Training<br/>GitHub Deployed<br/>Next in 5 days]
+        end
+        
+        subgraph "Redis Service"
+            REDIS[(Redis Cache<br/>Jobs & Data Storage<br/>Docker Image)]
+        end
+        
+        subgraph "Postgres Service"
+            POSTGRES[(PostgreSQL Database<br/>User Authentication<br/>Docker Image)]
+        end
     end
     
-    subgraph "Railway Deployment"
-        subgraph "Web Process"
-            API[FastAPI Web Server<br/>Port 8000]
-        end
-        
-        subgraph "Worker Process"
-            WKR[RQ Background Worker<br/>Model Training & Inference]
-        end
-        
-        REDIS[(Redis Cache<br/>Jobs & Data Storage)]
+    subgraph "External Data Sources"
+        AV[Alpha Vantage API<br/>Primary Data Source]
+        FH[Finnhub API<br/>Secondary Data Source]
     end
     
     subgraph "Storage & Monitoring"
@@ -69,33 +80,40 @@ flowchart TD
         MOBILE[Mobile/Desktop<br/>API Consumers]
     end
     
+    %% Service Dependencies
+    WEB -->|Depends on| REDIS
+    WEB -->|Depends on| POSTGRES
+    WORKER -->|Depends on| REDIS
+    TRAINER -->|Depends on| REDIS
+    TRAINER -->|Depends on| WORKER
+    
     %% Data Flow
-    AV -->|Market Data| API
-    FH -->|News & Quotes| API
-    API -->|Cache Lookup| REDIS
-    API -->|Job Enqueue| REDIS
-    REDIS -->|Process Jobs| WKR
-    WKR -->|Fetch Historical Data| AV
-    WKR -->|Load/Save Models| S3
-    WKR -->|Failure Notifications| SNS
+    AV -->|Market Data| WEB
+    FH -->|News & Quotes| WEB
+    WEB -->|Cache Lookup| REDIS
+    WEB -->|Job Enqueue| REDIS
+    REDIS -->|Process Jobs| WORKER
+    WORKER -->|Fetch Historical Data| AV
+    WORKER -->|Load/Save Models| S3
+    WORKER -->|Failure Notifications| SNS
+    TRAINER -->|Model Training| S3
     
     %% Client Interactions
-    FE -->|HTTPS Requests| API
-    MOBILE -->|API Calls| API
-    API -->|Metrics Data| PM
+    FE -->|HTTPS Requests| WEB
+    MOBILE -->|API Calls| WEB
+    WEB -->|Metrics Data| PM
     
-    %% Caching
-    REDIS -.->|Cache Miss| API
-    API -.->|Cache Store| REDIS
+    %% Authentication
+    WEB -->|User Auth| POSTGRES
     
     %% Styling
-    classDef dataSource fill:#e1f5fe
     classDef railway fill:#f3e5f5
+    classDef external fill:#e1f5fe
     classDef storage fill:#e8f5e8
     classDef client fill:#fff3e0
     
-    class AV,FH dataSource
-    class API,WKR,REDIS railway
+    class WEB,WORKER,TRAINER,REDIS,POSTGRES railway
+    class AV,FH external
     class S3,SNS,PM storage
     class FE,MOBILE client
 ```
@@ -107,46 +125,58 @@ How the different pieces of the codebase work together:
 ```mermaid
 graph TB
     subgraph "Frontend (React)"
-        FE_APP[App.js<br/>Main Application]
-        FE_HOME[HomePage.js<br/>News & Predictions UI]
+        FE_APP[App.js<br/>Main Application Router]
+        FE_LANDING[LandingPage.js<br/>Home & News Display]
+        FE_PREDICT[PredictPage.js<br/>Prediction Interface]
         FE_STOCK[StockPage.js<br/>Detailed Analysis]
+        FE_LOGIN[LoginPage.js<br/>User Authentication]
         FE_API[api.js<br/>API Client Layer]
+        FE_AUTH[AuthContext.js<br/>Authentication State]
     end
     
     subgraph "Backend (FastAPI)"
-        MAIN_APP[app.py<br/>Main API Server]
-        WORKER[worker.py<br/>Background Jobs]
+        MAIN_APP[app.py<br/>Main API Server<br/>1333 lines]
+        WORKER[worker.py<br/>Background Jobs<br/>RQ Worker]
         STORAGE[storage.py<br/>S3 Integration]
         SETTINGS[settings.py<br/>Configuration]
+        DATABASE[database.py<br/>PostgreSQL Setup]
+        AUTH_UTILS[auth_utils.py<br/>JWT Authentication]
     end
     
     subgraph "Model Training"
         TRAINER[scripts/train_models.py<br/>Weekly Training Job]
         ARIMA_MODEL[models/arima_model.py<br/>ARIMA Implementation]
-        OTHER_MODELS[models/*.py<br/>Future Model Placeholders]
+        OTHER_MODELS[models/*.py<br/>10 ML Model Placeholders]
     end
     
     subgraph "Infrastructure"
         PROCFILE[Procfile<br/>Railway Process Definition]
         REQUIREMENTS[requirements.txt<br/>Python Dependencies]
         RUNTIME[runtime.txt<br/>Python Version]
+        START_SH[start.sh<br/>Deployment Script]
     end
     
     subgraph "External Services"
-        AV_API[Alpha Vantage API]
-        FH_API[Finnhub API]
-        REDIS_SERVICE[Redis Service]
-        S3_SERVICE[AWS S3]
+        AV_API[Alpha Vantage API<br/>Primary Data Source]
+        FH_API[Finnhub API<br/>Secondary Data Source]
+        REDIS_SERVICE[Redis Service<br/>Caching & Jobs]
+        S3_SERVICE[AWS S3<br/>Model Storage]
+        POSTGRES_SERVICE[PostgreSQL<br/>User Database]
     end
     
     %% Frontend to Backend
     FE_API -->|HTTP Requests| MAIN_APP
-    FE_HOME -->|UI Components| FE_APP
+    FE_LANDING -->|UI Components| FE_APP
+    FE_PREDICT -->|UI Components| FE_APP
     FE_STOCK -->|UI Components| FE_APP
+    FE_LOGIN -->|UI Components| FE_APP
+    FE_AUTH -->|Auth State| FE_APP
     
     %% Backend Internal
     MAIN_APP -->|Job Enqueue| WORKER
     MAIN_APP -->|Data Storage| STORAGE
+    MAIN_APP -->|User Auth| AUTH_UTILS
+    MAIN_APP -->|Database| DATABASE
     WORKER -->|Model Loading| STORAGE
     TRAINER -->|Model Training| ARIMA_MODEL
     TRAINER -->|Artifact Upload| STORAGE
@@ -155,6 +185,7 @@ graph TB
     MAIN_APP -->|Market Data| AV_API
     MAIN_APP -->|News Data| FH_API
     MAIN_APP -->|Caching| REDIS_SERVICE
+    MAIN_APP -->|User Data| POSTGRES_SERVICE
     STORAGE -->|Model Storage| S3_SERVICE
     WORKER -->|Model Storage| S3_SERVICE
     
@@ -172,11 +203,11 @@ graph TB
     classDef infra fill:#fce4ec
     classDef external fill:#f3e5f5
     
-    class FE_APP,FE_HOME,FE_STOCK,FE_API frontend
-    class MAIN_APP,WORKER,STORAGE,SETTINGS backend
+    class FE_APP,FE_LANDING,FE_PREDICT,FE_STOCK,FE_LOGIN,FE_API,FE_AUTH frontend
+    class MAIN_APP,WORKER,STORAGE,SETTINGS,DATABASE,AUTH_UTILS backend
     class TRAINER,ARIMA_MODEL,OTHER_MODELS models
-    class PROCFILE,REQUIREMENTS,RUNTIME infra
-    class AV_API,FH_API,REDIS_SERVICE,S3_SERVICE external
+    class PROCFILE,REQUIREMENTS,RUNTIME,START_SH infra
+    class AV_API,FH_API,REDIS_SERVICE,S3_SERVICE,POSTGRES_SERVICE external
 ```
 
 ---
@@ -186,6 +217,7 @@ graph TB
 ### Core Platform Features
 - **Live API** on Railway with separate Web and Worker processes (via `Procfile`)
 - **React frontend** (SPA) with responsive design and real-time updates
+- **JWT Authentication** with PostgreSQL user database and protected routes
 - **Redis caching** for API responses, prediction payloads, and job management
 - **RQ background jobs** for asynchronous prediction computation and model training
 - **AWS S3** for model artifact storage and versioning
@@ -236,8 +268,16 @@ graph TB
 
 Base path: `/api`
 
+### Authentication Endpoints
+- `POST /api/auth/register`: Register a new user account
+- `POST /api/auth/login`: Login and receive JWT token
+- `GET /api/auth/me`: Get current user information (requires authentication)
+- `GET /api/auth/verify`: Verify if current token is valid
+- `POST /api/auth/logout`: Logout user (client-side token removal)
+
+### Market Data Endpoints
 - `GET /api/stock/{symbol}`: Current price and previous close, plus historical for charting
-- `GET /api/predictions/{symbol}`:
+- `GET /api/predictions/{symbol}`: **Requires authentication**
   - If cached or computed inline: returns `{ prediction, accuracy, historicalData }`
   - If enqueued: returns `202 Accepted` with `{ job_id }`
 - `GET /api/intraday/{symbol}`: Intraday 1‑minute session (09:30–16:00 ET), Finnhub‑first, AV fallback
@@ -245,10 +285,16 @@ Base path: `/api`
   - Finnhub‑first per‑range resolutions (1W=hourly, 1M=4h, 3M/6M/YTD/1Y=daily, 2Y/5Y/10Y=server‑downsampled from daily as 2d/5d/10d)
   - AV daily fallback with compact/full and date filtering
   - Returns `{ points: [{ date, price }], range }` and never 500s for empty data
+- `GET /api/overview/{symbol}`: Company overview with market metrics (P/E, market cap, etc.)
+- `GET /api/news`: Market news feed (6 articles, cached for 12 hours)
+- `GET /api/news?symbol=AAPL`: Company-specific news
+
+### System Endpoints
 - `GET /api/jobs/{job_id}`: Job polling endpoint: returns `done | running | failed | queued | timeout`
 - `GET /api/status`: Returns `redis`, `queue`, and `storage` health indicators
 - `POST /api/precompute?symbols=AAPL,MSFT&api_key=...`:
   - Enqueues multiple symbols for prediction; requires `ADMIN_API_KEY` when configured
+- `GET /api/tickers/batch?symbols=AAPL,MSFT,TSLA`: Batch ticker data with smart caching
 - `GET /metrics`: Prometheus exposition format
 
 Examples:
@@ -313,7 +359,12 @@ Model artifacts (for the simple demo model) are written to and read from an S3-c
 Backend/runtime:
 
 - `ALPHA_VANTAGE_API_KEY` — required
+- `FINNHUB_API_KEY` — optional but recommended for richer data
 - `REDIS_URL` — e.g., `redis://:<password>@<host>:<port>`
+- `DATABASE_URL` — PostgreSQL connection string for user authentication
+- `JWT_SECRET` — secret key for JWT token signing (default: `your-secret-key-change-this-in-production`)
+- `JWT_ALGORITHM` — JWT algorithm (default: `HS256`)
+- `ACCESS_TOKEN_EXPIRE_MINUTES` — token expiration time (default: `1440` = 24 hours)
 - `MODEL_VERSION` — version tag for cache/artifact keys (default: `v1`)
 - `ADMIN_API_KEY` — required for `/api/precompute` when set
 - `PORT` (default: `8000`), `HOST` (default: `0.0.0.0`), `WORKERS` (default: `6`)
@@ -381,12 +432,38 @@ web: gunicorn -k uvicorn.workers.UvicornWorker app:app
 worker: rq worker -u $REDIS_URL default
 ```
 
-Steps:
+### Railway Services Setup
 
-1. Create a Redis instance and capture `REDIS_URL`.
-2. Create an S3 bucket (or S3-compatible) and set `MODELS_BUCKET`, `S3_*` envs.
-3. Set `ALPHA_VANTAGE_API_KEY` and any optional alerting envs.
-4. Deploy the service; Railway will start both `web` and `worker`.
+The system is deployed with the following Railway services:
+
+1. **Web Service** - FastAPI application server
+2. **Worker Service** - RQ background worker for predictions
+3. **Trainer Service** - Weekly model training (scheduled)
+4. **Redis Service** - Caching and job queue
+5. **Postgres Service** - User authentication database
+
+### Deployment Steps:
+
+1. **Create Railway Services:**
+   - Create a Redis instance and capture `REDIS_URL`
+   - Create a PostgreSQL instance and capture `DATABASE_URL`
+   - Create an S3 bucket (or S3-compatible) and set `MODELS_BUCKET`, `S3_*` envs
+
+2. **Set Environment Variables:**
+   - `ALPHA_VANTAGE_API_KEY` (required)
+   - `FINNHUB_API_KEY` (optional but recommended)
+   - `JWT_SECRET` (change from default)
+   - Any optional alerting envs (`ALERT_SNS_TOPIC_ARN`, `ALERT_WEBHOOK_URL`)
+
+3. **Deploy:**
+   - Connect GitHub repository to Railway
+   - Railway will automatically start both `web` and `worker` processes
+   - The trainer service runs on a schedule (weekly)
+
+### Service Dependencies:
+- Web service depends on Redis and Postgres
+- Worker service depends on Redis
+- Trainer service depends on Redis and Worker
 
 ---
 
@@ -394,8 +471,11 @@ Steps:
 
 - Path: `front/`
 - Router basename: `/Stock_Hub` (for GitHub Pages)
+- **Authentication**: JWT-based login/register system with protected routes
+- **Components**: Landing page, prediction interface, stock analysis, user authentication
 - Uses `getPredictions`, `getStockData`, and job polling via `/api/jobs/:id`
 - Configures base URL via `REACT_APP_API_BASE_URL` or auto-inferring
+- **Protected Routes**: Predictions and stock analysis require authentication
 
 ### Current UX and data flow
 
@@ -481,6 +561,36 @@ npm start
 Cache verification:
 
 - First `/api/news` call logs `cache_hit: False`; subsequent calls within 12 hours log `cache_hit: True`.
+
+---
+
+## Authentication System
+
+The platform includes a comprehensive JWT-based authentication system:
+
+### User Management
+- **Registration**: Users can create accounts with username, email, and password
+- **Login**: JWT token-based authentication with configurable expiration
+- **Password Security**: Bcrypt hashing for secure password storage
+- **Protected Routes**: Predictions and detailed analysis require authentication
+
+### Database Schema
+- **Users Table**: Stores user credentials and profile information
+- **JWT Tokens**: Stateless authentication with configurable expiration
+- **Session Management**: Client-side token storage with automatic refresh
+
+### Security Features
+- **Password Hashing**: Bcrypt with salt rounds
+- **JWT Security**: Configurable secret key and algorithm
+- **CORS Protection**: Configured for specific origins
+- **Input Validation**: Email and password validation
+- **Error Handling**: Secure error messages without information leakage
+
+### API Integration
+- **Auth Endpoints**: Complete CRUD operations for user management
+- **Token Validation**: Middleware for protecting authenticated routes
+- **Auto-logout**: Token expiration handling with redirect to login
+- **Persistent Sessions**: localStorage-based token persistence
 
 ---
 
