@@ -34,6 +34,7 @@ from auth_utils import (
     get_user_by_username,
     get_user_by_email
 )
+import yfinance as yf
 
 # Prometheus metrics
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
@@ -197,6 +198,28 @@ def is_trading_day(date_str: str) -> bool:
         return date_obj.weekday() < 5  # Monday = 0, Friday = 4
     except:
         return False
+
+def get_last_closed_trading_day() -> datetime:
+    """Get the last closed trading day (previous trading day, skipping weekends)"""
+    et = ZoneInfo('America/New_York')
+    now = datetime.now(et)
+    
+    # If it's before market close today, use yesterday as base
+    # If it's after market close, use today as base
+    market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
+    
+    if now < market_close:
+        # Before close, use previous day
+        candidate = now - timedelta(days=1)
+    else:
+        # After close, use today
+        candidate = now
+    
+    # Go back until we find a weekday (Monday=0, Friday=4)
+    while candidate.weekday() >= 5:  # Saturday=5, Sunday=6
+        candidate = candidate - timedelta(days=1)
+    
+    return candidate
 
 def precompute_ticker_data(symbol: str) -> dict:
     """Precompute the exact 5-day data format for frontend"""
@@ -406,242 +429,251 @@ def fetch_news(symbol: Optional[str] = None, limit: int = 6):
     return articles[:limit]
 
 def fetch_stock_data(symbol, full: bool = False):
-    """Fetch historical stock data from Alpha Vantage.
-    When full=True, requests the full history instead of the compact (~100 days).
+    """Fetch historical daily stock data using yfinance, clamped to last closed trading day.
+    When full=True, fetches more historical data (10 years vs 100 days).
+    Returns [{date: YYYY-MM-DD, price: float}] sorted by date.
     """
     t0 = time.perf_counter()
-    cache_key = f"av:daily:{'full' if full else 'compact'}:{symbol}"
+    
+    # Get last closed trading day for clamping
+    last_closed = get_last_closed_trading_day()
+    closed_date_str = last_closed.strftime('%Y-%m-%d')
+    
+    # Cache key includes date for auto-invalidation
+    cache_key = f"yf:daily:{'full' if full else 'compact'}:{symbol}:{closed_date_str}"
     cached = _cache_get(cache_key)
     if cached:
         try:
             payload = json.loads(cached)
             if isinstance(payload, list) and payload:
-                print(json.dumps({"route": "av_daily", "symbol": symbol, "cache_hit": True, "latency_ms": int((time.perf_counter()-t0)*1000)}))
+                print(json.dumps({"route": "yf_daily", "symbol": symbol, "cache_hit": True, "date": closed_date_str, "latency_ms": int((time.perf_counter()-t0)*1000)}))
                 return payload
         except Exception:
             pass
-
-    # optional throttle to avoid bursts
-    throttled = _throttle(f"daily:{symbol}")
-
-    outsize = 'full' if full else 'compact'
-    url = f'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}&outputsize={outsize}'
-    data = _request_with_backoff(url)
-    AV_CALLS.labels(type='daily').inc()
     
-    if "Error Message" in data:
-        raise Exception(data["Error Message"])
-    
-    time_series = data.get('Time Series (Daily)', {})
-    historical_data = []
-    
-    for date, values in time_series.items():
-        historical_data.append({
-            'date': date,
-            'price': float(values['4. close'])
-        })
-    
-    historical_data = sorted(historical_data, key=lambda x: x['date'])
-    _cache_set(cache_key, json.dumps(historical_data), ttl_seconds=30 * 60)
-    print(json.dumps({"route": "av_daily", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000)}))
-    return historical_data
+    try:
+        ticker = yf.Ticker(symbol)
+        
+        # Use start/end dates instead of period for more reliable fetching
+        end_date = last_closed + timedelta(days=1)  # End date exclusive
+        if full:
+            # Full history: 10 years
+            start_date = end_date - timedelta(days=365*10)
+        else:
+            # Compact: ~100 days
+            start_date = end_date - timedelta(days=100)
+        
+        hist = ticker.history(start=start_date, end=end_date)
+        
+        if hist.empty:
+            raise Exception(f"No data available for {symbol}")
+        
+        historical_data = []
+        
+        # Convert to required format and clamp to last closed day
+        for idx, row in hist.iterrows():
+            # Get date (handle both timezone-aware and naive)
+            if idx.tz is not None:
+                dt = idx.tz_convert(ZoneInfo('America/New_York'))
+            else:
+                dt = idx.replace(tzinfo=ZoneInfo('America/New_York'))
+            
+            date_str = dt.strftime('%Y-%m-%d')
+            
+            # Only include data up to and including last closed trading day
+            if date_str <= closed_date_str:
+                historical_data.append({
+                    'date': date_str,
+                    'price': float(row['Close'])
+                })
+        
+        # Sort by date
+        historical_data = sorted(historical_data, key=lambda x: x['date'])
+        
+        # Cache with market-aware TTL
+        ttl = get_smart_cache_ttl()
+        _cache_set(cache_key, json.dumps(historical_data), ttl_seconds=ttl)
+        
+        print(json.dumps({
+            "route": "yf_daily",
+            "symbol": symbol,
+            "cache_hit": False,
+            "date": closed_date_str,
+            "count": len(historical_data),
+            "latency_ms": int((time.perf_counter()-t0)*1000)
+        }))
+        
+        return historical_data
+        
+    except Exception as e:
+        print(json.dumps({
+            "route": "yf_daily",
+            "symbol": symbol,
+            "error": str(e),
+            "latency_ms": int((time.perf_counter()-t0)*1000)
+        }))
+        raise HTTPException(status_code=500, detail=f"Failed to fetch stock data: {str(e)}")
 
 def fetch_global_quote(symbol):
-    """Fetch current price and previous close using GLOBAL_QUOTE."""
+    """Fetch current price and previous close using yfinance.
+    Returns (price, previousClose) tuple.
+    """
     t0 = time.perf_counter()
-    cache_key = f"av:quote:{symbol}"
+    cache_key = f"yf:quote:{symbol}"
     cached = _cache_get(cache_key)
     if cached:
         try:
             js = json.loads(cached)
-            print(json.dumps({"route": "av_quote", "symbol": symbol, "cache_hit": True, "latency_ms": int((time.perf_counter()-t0)*1000)}))
+            print(json.dumps({"route": "yf_quote", "symbol": symbol, "cache_hit": True, "latency_ms": int((time.perf_counter()-t0)*1000)}))
             return float(js['price']), float(js['previousClose'])
         except Exception:
             pass
-
-    throttled = _throttle(f"quote:{symbol}")
-
-    # Prefer Finnhub when available
-    if FINNHUB_API_KEY:
-        try:
-            url = f"https://finnhub.io/api/v1/quote?symbol={symbol.upper()}&token={FINNHUB_API_KEY}"
-            js = requests.get(url, timeout=12).json()
-            price = float(js.get('c') or 0)
-            prev_close = float(js.get('pc') or 0)
-            if price > 0 and prev_close > 0:
-                _cache_set(cache_key, json.dumps({"price": price, "previousClose": prev_close}), ttl_seconds=10 * 60)
-                print(json.dumps({"route": "fh_quote", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000)}))
-                return price, prev_close
-        except Exception:
-            pass
-
-    url = f'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}'
-    data = _request_with_backoff(url)
-    AV_CALLS.labels(type='quote').inc()
-    quote = data.get('Global Quote') or {}
-    if not quote:
-        raise HTTPException(status_code=502, detail='No quote data available')
+    
     try:
-        price = float(quote.get('05. price', 0))
-        prev_close = float(quote.get('08. previous close', 0))
-    except Exception:
-        raise HTTPException(status_code=502, detail='Invalid quote data format')
-    _cache_set(cache_key, json.dumps({"price": price, "previousClose": prev_close}), ttl_seconds=10 * 60)
-    print(json.dumps({"route": "av_quote", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000)}))
-    return price, prev_close
+        ticker = yf.Ticker(symbol)
+        info = ticker.info
+        
+        # Get current price (or last close if market closed)
+        price = info.get('currentPrice') or info.get('regularMarketPrice') or info.get('previousClose', 0)
+        
+        # Get previous close
+        prev_close = info.get('previousClose', 0)
+        
+        if not price or not prev_close:
+            # Fallback: use recent history
+            hist = ticker.history(period='5d')
+            if not hist.empty:
+                price = float(hist['Close'].iloc[-1])
+                if len(hist) > 1:
+                    prev_close = float(hist['Close'].iloc[-2])
+                else:
+                    prev_close = price
+        
+        price = float(price)
+        prev_close = float(prev_close)
+        
+        if price <= 0 or prev_close <= 0:
+            raise Exception("Invalid price data")
+        
+        # Cache with 10-minute TTL for quote data (used for display, not charts)
+        _cache_set(cache_key, json.dumps({"price": price, "previousClose": prev_close}), ttl_seconds=10 * 60)
+        
+        print(json.dumps({
+            "route": "yf_quote",
+            "symbol": symbol,
+            "cache_hit": False,
+            "latency_ms": int((time.perf_counter()-t0)*1000)
+        }))
+        
+        return price, prev_close
+        
+    except Exception as e:
+        print(json.dumps({
+            "route": "yf_quote",
+            "symbol": symbol,
+            "error": str(e),
+            "latency_ms": int((time.perf_counter()-t0)*1000)
+        }))
+        raise HTTPException(status_code=502, detail=f'Failed to fetch quote: {str(e)}')
 
 
-def fetch_intraday(symbol: str, interval: str = '1min'):
-    """Fetch today's intraday series (ET) and filter to regular session 09:30–16:00.
-    Returns a list of { time: 'HH:MM', price: float } sorted by time.
+def fetch_intraday(symbol: str, interval: str = '5m'):
+    """Fetch intraday 5-minute data for the last closed trading day using yfinance.
+    Returns {points: [{time: HH:MM, price: float, date: ISO}], market: 'closed', asOf: ISO}
     """
     t0 = time.perf_counter()
-    cache_key = f"av:intraday:{interval}:{symbol}"
+    
+    # Get last closed trading day
+    last_closed = get_last_closed_trading_day()
+    closed_date_str = last_closed.strftime('%Y-%m-%d')
+    
+    # Cache key includes the date for auto-invalidation
+    cache_key = f"yf:intraday:5m:{symbol}:{closed_date_str}"
     cached = _cache_get(cache_key)
     if cached:
         try:
             payload = json.loads(cached)
-            print(json.dumps({"route": "av_intraday", "symbol": symbol, "cache_hit": True, "latency_ms": int((time.perf_counter()-t0)*1000)}))
+            print(json.dumps({"route": "yf_intraday", "symbol": symbol, "cache_hit": True, "date": closed_date_str, "latency_ms": int((time.perf_counter()-t0)*1000)}))
             return payload
         except Exception:
             pass
-
+    
     et = ZoneInfo('America/New_York')
-    now_et = datetime.now(et)
-    session_date = now_et.date()
-    open_time = datetime.combine(session_date, datetime.min.time(), et).replace(hour=9, minute=30)
-    close_time = datetime.combine(session_date, datetime.min.time(), et).replace(hour=16, minute=0)
-
-    # Helper: determine if a day's intraday series appears complete (near session close)
-    def _is_full_session(points_list):
-        try:
-            if not points_list or len(points_list) < 10:
-                return False
-            last_iso = points_list[-1].get('date')
-            if not last_iso:
-                return False
-            last_dt = datetime.fromisoformat(last_iso)
-            # Normalize tzinfo to ET if missing
-            if last_dt.tzinfo is None:
-                last_dt = last_dt.replace(tzinfo=et)
-            # Session close for that day in ET
-            day = last_dt.date()
-            day_close = datetime.combine(day, datetime.min.time(), et).replace(hour=16, minute=0)
-            # Consider session full if we have data within the last 2 minutes before/at close
-            return last_dt >= (day_close - timedelta(minutes=2))
-        except Exception:
-            return False
-
-    # Prefer Finnhub when available
-    if FINNHUB_API_KEY:
-        def fetch_candles(day_date):
-            day_open = datetime.combine(day_date, datetime.min.time(), et).replace(hour=9, minute=30)
-            day_close = datetime.combine(day_date, datetime.min.time(), et).replace(hour=16, minute=0)
-            start = int(day_open.timestamp())
-            end_ts = min(day_close, now_et)
-            end = int(end_ts.timestamp())
-            url = f"https://finnhub.io/api/v1/stock/candle?symbol={symbol.upper()}&resolution=1&from={start}&to={end}&token={FINNHUB_API_KEY}"
-            js = requests.get(url, timeout=15).json()
-            if js.get('s') != 'ok':
-                return []
-            times = js.get('t') or []
-            closes = js.get('c') or []
-            out = []
-            for ts_i, c_i in zip(times, closes):
-                ts = datetime.fromtimestamp(int(ts_i), tz=et)
-                if ts < day_open or ts > day_close:
-                    continue
-                out.append({"time": ts.strftime('%H:%M'), "price": float(c_i), "date": ts.isoformat()})
-            return out
-
-        points = sorted(fetch_candles(session_date), key=lambda x: x['time'])
-        # Always prefer a completed prior trading day if today's session isn't complete yet
-        if not _is_full_session(points):
-            for delta in range(1, 6):
-                prev_day = session_date - timedelta(days=delta)
-                pts = sorted(fetch_candles(prev_day), key=lambda x: x['time'])
-                if _is_full_session(pts):
-                    points = pts
-                    break
-        # If still empty, fall back to Alpha Vantage below
-        if len(points) >= 2:
-            market_is_open = (now_et.weekday() < 5 and open_time <= now_et <= close_time)
-            state = 'open' if market_is_open else 'closed'
-            result = {"points": points, "market": state, "asOf": now_et.isoformat()}
-            _cache_set(cache_key, json.dumps(result), ttl_seconds=60)
-            try:
-                last_dt = points[-1].get('date') or points[-1].get('time')
-            except Exception:
-                last_dt = None
-            print(json.dumps({"route": "fh_intraday", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000), "count": len(points), "last_point": last_dt, "market_open": market_is_open}))
-            return result
-
-    throttled = _throttle(f"intraday:{symbol}")
-
-    url = (
-        f"https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY"
-        f"&symbol={symbol}&interval={interval}&apikey={ALPHA_VANTAGE_API_KEY}&outputsize=full"
-    )
-    data = _request_with_backoff(url)
-    AV_CALLS.labels(type='intraday').inc()
-    # Data key name depends on interval
-    key = f"Time Series ({interval})"
-    series = data.get(key, {}) if isinstance(data, dict) else {}
-
-    def extract_for_day(day_date):
-        out = []
-        start = datetime.combine(day_date, datetime.min.time(), et).replace(hour=9, minute=30)
-        # IMPORTANT: Clamp today's series to "now" so the chart doesn't extend to 16:00 when market is open
-        end = datetime.combine(day_date, datetime.min.time(), et).replace(hour=16, minute=0)
-        if day_date == session_date:
-            try:
-                end = min(end, now_et)
-            except Exception:
-                pass
-        for ts_str, values in series.items():
-            try:
-                ts = datetime.strptime(ts_str, '%Y-%m-%d %H:%M:%S').replace(tzinfo=et)
-            except Exception:
-                continue
-            if ts.date() != day_date:
-                continue
-            if ts < start or ts > end:
-                continue
-            try:
-                price = float(values.get('4. close') or values.get('1. open') or 0)
-            except Exception:
-                continue
-            out.append({"time": ts.strftime('%H:%M'), "price": price, "date": ts.isoformat()})
-        return sorted(out, key=lambda x: x['time'])
-
-    # Primary: today's regular session
-    points = extract_for_day(session_date)
-    # If today's session isn't complete, fallback to the last available full trading day
-    if not _is_full_session(points):
-        unique_dates = set()
-        for ts_str in series.keys():
-            try:
-                ts = datetime.strptime(ts_str, '%Y-%m-%d %H:%M:%S').replace(tzinfo=et)
-                unique_dates.add(ts.date())
-            except Exception:
-                continue
-        if unique_dates:
-            prior_days = sorted([d for d in unique_dates if d < session_date], reverse=True)
-            for d in prior_days:
-                pts = extract_for_day(d)
-                if _is_full_session(pts):
-                    points = pts
-                    break
-    state = 'open' if (now_et.weekday() < 5 and open_time <= now_et <= close_time) else 'closed'
-    result = {"points": points, "market": state, "asOf": now_et.isoformat()}
-    # Short cache as data moves intraday
-    _cache_set(cache_key, json.dumps(result), ttl_seconds=60)
+    
     try:
-        last_dt = points[-1].get('date') or points[-1].get('time')
-    except Exception:
-        last_dt = None
-    print(json.dumps({"route": "av_intraday", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000), "count": len(points), "last_point": last_dt}))
-    return result
+        # Fetch 5-minute intraday data for the last closed trading day
+        ticker = yf.Ticker(symbol)
+        
+        # Get data for a 2-day window to ensure we capture the full day
+        start_date = last_closed - timedelta(days=1)
+        end_date = last_closed + timedelta(days=1)
+        
+        hist = ticker.history(start=start_date, end=end_date, interval='5m')
+        
+        if hist.empty:
+            # Fallback: try getting 1 day of data
+            hist = ticker.history(period='1d', interval='5m')
+        
+        points = []
+        
+        # Filter to the specific closed trading day, session hours 9:30-16:00 ET
+        for idx, row in hist.iterrows():
+            # Convert index to ET timezone
+            dt = idx.tz_convert(et) if idx.tz is not None else idx.replace(tzinfo=et)
+            
+            # Only include data from the last closed trading day
+            if dt.date() != last_closed.date():
+                continue
+            
+            # Filter to market hours 9:30 AM - 4:00 PM ET
+            if dt.hour < 9 or (dt.hour == 9 and dt.minute < 30) or dt.hour >= 16:
+                continue
+            
+            price = float(row['Close'])
+            points.append({
+                "time": dt.strftime('%H:%M'),
+                "price": price,
+                "date": dt.isoformat()
+            })
+        
+        # Sort by time
+        points = sorted(points, key=lambda x: x['time'])
+        
+        # Market is always 'closed' since we're showing previous day
+        result = {
+            "points": points,
+            "market": "closed",
+            "asOf": last_closed.replace(hour=16, minute=0, second=0).isoformat()
+        }
+        
+        # Cache with market-aware TTL: 24 hours for closed day data
+        ttl = get_smart_cache_ttl()
+        _cache_set(cache_key, json.dumps(result), ttl_seconds=ttl)
+        
+        print(json.dumps({
+            "route": "yf_intraday",
+            "symbol": symbol,
+            "cache_hit": False,
+            "date": closed_date_str,
+            "count": len(points),
+            "latency_ms": int((time.perf_counter()-t0)*1000)
+        }))
+        
+        return result
+        
+    except Exception as e:
+        print(json.dumps({
+            "route": "yf_intraday",
+            "symbol": symbol,
+            "error": str(e),
+            "latency_ms": int((time.perf_counter()-t0)*1000)
+        }))
+        # Return empty result on error
+        return {
+            "points": [],
+            "market": "closed",
+            "asOf": last_closed.replace(hour=16, minute=0, second=0).isoformat()
+        }
 
 def calculate_prediction(prices, days_ahead=1):
     """Simple prediction based on moving average and trend."""
@@ -1008,155 +1040,81 @@ async def get_tickers_batch(symbols: str):
 
 @app.get("/api/timeseries/{symbol}")
 async def get_timeseries(symbol: str, range: str = '1M'):
-    """Return timeseries for charting. 1D uses intraday; others use daily prices.
+    """Return timeseries for charting using yfinance. 1D uses intraday; others use daily prices.
+    All data clamped to last closed trading day.
     Response: { points: [{date, price}], range }
     """
     try:
-        # Server-side cache (per symbol, range)
         symbol_u = symbol.upper()
-        cache_key = f"timeseries:{symbol_u}:{range}:v1"
-        # TTL suggestions
-        long_ttl = 12 * 60 * 60  # 12h
-        mid_ttl = 45 * 60        # 45m
-        short_ttl = 10 * 60      # 10m
-        intraday_ttl = 60        # 60s
-        ttl_map = {
-            '1D': intraday_ttl,
-            '1W': short_ttl,
-            '1M': mid_ttl,
-            '3M': mid_ttl,
-            '6M': mid_ttl,
-            'YTD': long_ttl,
-            '1Y': long_ttl,
-            '2Y': long_ttl,
-            '5Y': long_ttl,
-            '10Y': long_ttl,
-        }
-        ttl_seconds = ttl_map.get(range, long_ttl)
-
+        
+        # Get last closed trading day for cache key
+        last_closed = get_last_closed_trading_day()
+        closed_date_str = last_closed.strftime('%Y-%m-%d')
+        
+        # Cache key includes date for auto-invalidation
+        cache_key = f"yf:timeseries:{symbol_u}:{range}:{closed_date_str}"
+        
+        # Use market-aware TTL
+        ttl_seconds = get_smart_cache_ttl()
+        
         cached = _cache_get(cache_key)
         if cached:
             try:
                 js = json.loads(cached)
-                print(json.dumps({"route": "/api/timeseries", "symbol": symbol_u, "range": range, "cache_hit": True}))
+                print(json.dumps({"route": "/api/timeseries", "symbol": symbol_u, "range": range, "cache_hit": True, "date": closed_date_str}))
                 return js
             except Exception:
                 pass
-
-        et = ZoneInfo('America/New_York')
-        now_et = datetime.now(et)
+        
+        # For 1D: use intraday 5-minute data
         if range == '1D':
             intr = fetch_intraday(symbol)
             result_1d = {"points": intr.get('points', []), "range": '1D'}
             _cache_set(cache_key, json.dumps(result_1d), ttl_seconds=ttl_seconds)
-            print(json.dumps({"route": "/api/timeseries", "symbol": symbol_u, "range": range, "cache_hit": False}))
+            print(json.dumps({"route": "/api/timeseries", "symbol": symbol_u, "range": range, "cache_hit": False, "date": closed_date_str}))
             return result_1d
-
-        # Prefer Finnhub candles for broader ranges to avoid AV rate limits
-        def finnhub_candles(start_dt: datetime, end_dt: datetime, resolution: str):
-            if not FINNHUB_API_KEY:
-                return None
-            try:
-                url = (
-                    f"https://finnhub.io/api/v1/stock/candle?symbol={symbol.upper()}"
-                    f"&resolution={resolution}&from={int(start_dt.timestamp())}&to={int(end_dt.timestamp())}&token={FINNHUB_API_KEY}"
-                )
-                js = requests.get(url, timeout=15).json()
-                if js.get('s') != 'ok':
-                    print(json.dumps({"route": "finnhub_candles", "symbol": symbol, "resolution": resolution, "status": js.get('s'), "error": js.get('error', 'no_data')}))
-                    return None
-                times = js.get('t') or []
-                closes = js.get('c') or []
-                out = []
-                for ts_i, c_i in zip(times, closes):
-                    dt = datetime.fromtimestamp(int(ts_i), tz=et)
-                    # Use full timestamp for intraday/hourly resolutions; date-only for D/W/M
-                    if resolution in ['1','5','15','30','60']:
-                        out.append({"date": dt.isoformat(), "price": float(c_i)})
-                    else:
-                        out.append({"date": dt.strftime('%Y-%m-%d'), "price": float(c_i)})
-                print(json.dumps({"route": "finnhub_candles", "symbol": symbol, "resolution": resolution, "status": "ok", "count": len(out)}))
-                return out
-            except Exception as e:
-                print(json.dumps({"route": "finnhub_candles", "symbol": symbol, "resolution": resolution, "error": str(e)}))
-                return None
-
+        
+        # For all other ranges: use daily data from yfinance
+        # Determine if we need full history
+        want_full = range in ['YTD', '1Y', '2Y', '5Y', '10Y']
+        data = fetch_stock_data(symbol, full=want_full)
+        
+        # Compute start date for filtering
+        et = ZoneInfo('America/New_York')
+        now_et = datetime.now(et)
         start = _compute_start_date(range, now_et)
-        # Choose efficient resolutions per range
-        def map_resolution(rk: str) -> str:
-            # Finnhub free tier: intraday (1,5,15,30,60) only for current day
-            # For historical ranges, must use D/W/M
-            # Using hourly (60) for 1W, 4-hour blocks for 1M as compromise
-            if rk == '1W':
-                return '60'   # hourly for past week
-            if rk == '1M':
-                return 'D'    # daily for past month (intraday not available on free tier)
-            if rk in ['3M', '6M']:
-                return 'D'    # daily
-            if rk in ['YTD', '1Y']:
-                return 'D'    # daily
-            if rk == '2Y':
-                return 'D'    # daily
-            if rk == '5Y':
-                return 'D'    # daily
-            if rk == '10Y':
-                return 'D'    # daily
-            return 'D'
-        res = map_resolution(range)
-
-        # Finnhub doesn't support arbitrary multi-day strings; emulate by using daily and then downsampling when needed
-        req_res = res
-        if res in ['2D', '5D', '10D']:
-            req_res = 'D'
-
-        fh = finnhub_candles(start, now_et, req_res)
-        if fh is not None and len(fh) >= 2:
-            # If we requested D but caller wants 2D/5D/10D, downsample server-side to reduce payload (keep every Nth)
-            if res in ['2D', '5D', '10D']:
-                n = 2 if res == '2D' else 5 if res == '5D' else 10
-                fh = fh[::n]
-            out = {"points": fh, "range": range}
-            _cache_set(cache_key, json.dumps(out), ttl_seconds=ttl_seconds)
-            print(json.dumps({"route": "/api/timeseries", "symbol": symbol_u, "range": range, "cache_hit": False}))
-            return out
-
-        # Fallback to Alpha Vantage daily when Finnhub down
-        try:
-            # For long ranges, ask AV for full history
-            want_full = range in ['YTD', '1Y', '2Y', '5Y', '10Y']
-            data = fetch_stock_data(symbol, full=want_full)
-            # Compare dates only (avoid tz-aware vs naive mismatch)
-            start_date = start.date()
-            pts = [p for p in data if datetime.strptime(p['date'], '%Y-%m-%d').date() >= start_date]
-            # If filtering produced too few points (e.g., API cache lag), take a sensible tail slice
-            if len(pts) < 2:
-                fallback_counts = {
-                    '1W': 7,
-                    '1M': 22,
-                    '3M': 66,
-                    '6M': 132,
-                    'YTD': 180,
-                    '1Y': 252,
-                    '2Y': 504,
-                    '5Y': 1260,
-                    '10Y': 2520,
-                }
-                n = fallback_counts.get(range, 60)
-                pts = data[-min(len(data), n):]
-            out2 = {"points": pts, "range": range}
-            _cache_set(cache_key, json.dumps(out2), ttl_seconds=ttl_seconds)
-            print(json.dumps({"route": "/api/timeseries", "symbol": symbol_u, "range": range, "cache_hit": False}))
-            return out2
-        except Exception:
-            # As a last resort, return an empty series so the UI doesn't explode
-            out_empty = {"points": [], "range": range}
-            _cache_set(cache_key, json.dumps(out_empty), ttl_seconds=ttl_seconds)
-            print(json.dumps({"route": "/api/timeseries", "symbol": symbol_u, "range": range, "cache_hit": False, "error": "fallback_empty"}))
-            return out_empty
+        start_date = start.date()
+        
+        # Filter to range and clamp to last closed day
+        pts = [p for p in data if datetime.strptime(p['date'], '%Y-%m-%d').date() >= start_date]
+        
+        # If filtering produced too few points, take a sensible tail slice
+        if len(pts) < 2:
+            fallback_counts = {
+                '1W': 7,
+                '1M': 22,
+                '3M': 66,
+                '6M': 132,
+                'YTD': 180,
+                '1Y': 252,
+                '2Y': 504,
+                '5Y': 1260,
+                '10Y': 2520,
+            }
+            n = fallback_counts.get(range, 60)
+            pts = data[-min(len(data), n):]
+        
+        result = {"points": pts, "range": range}
+        _cache_set(cache_key, json.dumps(result), ttl_seconds=ttl_seconds)
+        print(json.dumps({"route": "/api/timeseries", "symbol": symbol_u, "range": range, "cache_hit": False, "date": closed_date_str, "count": len(pts)}))
+        return result
+        
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(json.dumps({"route": "/api/timeseries", "symbol": symbol_u, "range": range, "error": str(e)}))
+        # Return empty series on error so UI doesn't break
+        return {"points": [], "range": range}
 
 
 def _format_number(n):
@@ -1168,84 +1126,83 @@ def _format_number(n):
 
 
 def fetch_overview(symbol: str):
-    """Get snapshot stats for the symbol.
-    Prefers Finnhub metrics + quote; falls back to Alpha Vantage OVERVIEW + GLOBAL_QUOTE.
+    """Get snapshot stats for the symbol using yfinance.
     Returns dictionary with common fields.
     """
     t0 = time.perf_counter()
-    cache_key = f"overview:{symbol.upper()}"
+    cache_key = f"yf:overview:{symbol.upper()}"
     cached = _cache_get(cache_key)
     if cached:
         try:
             payload = json.loads(cached)
-            print(json.dumps({"route": "overview", "symbol": symbol, "cache_hit": True, "latency_ms": int((time.perf_counter()-t0)*1000)}))
+            print(json.dumps({"route": "yf_overview", "symbol": symbol, "cache_hit": True, "latency_ms": int((time.perf_counter()-t0)*1000)}))
             return payload
         except Exception:
             pass
     
-    # Finnhub path
-    if FINNHUB_API_KEY:
-        try:
-            prof = requests.get(f"https://finnhub.io/api/v1/stock/profile2?symbol={symbol.upper()}&token={FINNHUB_API_KEY}", timeout=12).json()
-        except Exception:
-            prof = {}
-        try:
-            met = requests.get(f"https://finnhub.io/api/v1/stock/metric?symbol={symbol.upper()}&metric=all&token={FINNHUB_API_KEY}", timeout=12).json()
-        except Exception:
-            met = {}
-        try:
-            q = requests.get(f"https://finnhub.io/api/v1/quote?symbol={symbol.upper()}&token={FINNHUB_API_KEY}", timeout=12).json()
-        except Exception:
-            q = {}
-        metrics = met.get('metric', {}) if isinstance(met, dict) else {}
-        result = {
-            "marketCap": _format_number(metrics.get('marketCapitalization')),
-            "pe": _format_number(metrics.get('peBasicExclExtraTTM') or metrics.get('peTTM')),
-            "eps": _format_number(metrics.get('epsBasicExclExtraItemsTTM') or metrics.get('epsTTM')),
-            "beta": _format_number(metrics.get('beta')),
-            "dividendYield": _format_number(metrics.get('dividendYieldIndicatedAnnual')),
-            "fiftyTwoWeekHigh": _format_number(metrics.get('52WeekHigh')),
-            "fiftyTwoWeekLow": _format_number(metrics.get('52WeekLow')),
-            "open": _format_number(q.get('o')),
-            "high": _format_number(q.get('h')),
-            "low": _format_number(q.get('l')),
-            "prevClose": _format_number(q.get('pc')),
-            "volume": _format_number(metrics.get('volume')) or _format_number(q.get('v')),
-            "name": prof.get('name') or symbol.upper(),
-            "currency": prof.get('currency') or 'USD'
-        }
-        if any(v is not None for v in result.values()):
-            # Cache for 1 hour (overview data changes less frequently)
-            _cache_set(cache_key, json.dumps(result), ttl_seconds=3600)
-            print(json.dumps({"route": "overview", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000), "source": "finnhub"}))
-            return result
-    # Alpha Vantage fallback
-    ov = {}
     try:
-        ov = _request_with_backoff(f"https://www.alphavantage.co/query?function=OVERVIEW&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}")
-    except Exception:
-        ov = {}
-    price, prev_close = fetch_global_quote(symbol)
-    result = {
-        "marketCap": _format_number(ov.get('MarketCapitalization')),
-        "pe": _format_number(ov.get('PERatio')),
-        "eps": _format_number(ov.get('EPS')),
-        "beta": _format_number(ov.get('Beta')),
-        "dividendYield": _format_number(ov.get('DividendYield')),
-        "fiftyTwoWeekHigh": _format_number(ov.get('52WeekHigh')),
-        "fiftyTwoWeekLow": _format_number(ov.get('52WeekLow')),
-        "open": None,
-        "high": None,
-        "low": None,
-        "prevClose": prev_close,
-        "volume": _format_number(ov.get('SharesOutstanding')),
-        "name": ov.get('Name') or symbol.upper(),
-        "currency": ov.get('Currency') or 'USD'
-    }
-    # Cache for 1 hour (overview data changes less frequently)
-    _cache_set(cache_key, json.dumps(result), ttl_seconds=3600)
-    print(json.dumps({"route": "overview", "symbol": symbol, "cache_hit": False, "latency_ms": int((time.perf_counter()-t0)*1000), "source": "alphavantage"}))
-    return result
+        ticker = yf.Ticker(symbol)
+        info = ticker.info
+        
+        # Get recent history for OHLC data
+        hist = ticker.history(period='5d')
+        
+        # Extract metrics from yfinance info
+        result = {
+            "marketCap": _format_number(info.get('marketCap')),
+            "pe": _format_number(info.get('trailingPE') or info.get('forwardPE')),
+            "eps": _format_number(info.get('trailingEps')),
+            "beta": _format_number(info.get('beta')),
+            "dividendYield": _format_number(info.get('dividendYield')),
+            "fiftyTwoWeekHigh": _format_number(info.get('fiftyTwoWeekHigh')),
+            "fiftyTwoWeekLow": _format_number(info.get('fiftyTwoWeekLow')),
+            "open": _format_number(hist['Open'].iloc[-1]) if not hist.empty else None,
+            "high": _format_number(hist['High'].iloc[-1]) if not hist.empty else None,
+            "low": _format_number(hist['Low'].iloc[-1]) if not hist.empty else None,
+            "prevClose": _format_number(info.get('previousClose')),
+            "volume": _format_number(info.get('volume')),
+            "name": info.get('longName') or info.get('shortName') or symbol.upper(),
+            "currency": info.get('currency') or 'USD'
+        }
+        
+        # Cache with 24-hour TTL
+        ttl = get_smart_cache_ttl()
+        _cache_set(cache_key, json.dumps(result), ttl_seconds=ttl)
+        
+        print(json.dumps({
+            "route": "yf_overview",
+            "symbol": symbol,
+            "cache_hit": False,
+            "latency_ms": int((time.perf_counter()-t0)*1000),
+            "source": "yfinance"
+        }))
+        
+        return result
+        
+    except Exception as e:
+        print(json.dumps({
+            "route": "yf_overview",
+            "symbol": symbol,
+            "error": str(e),
+            "latency_ms": int((time.perf_counter()-t0)*1000)
+        }))
+        # Return minimal result on error
+        return {
+            "marketCap": None,
+            "pe": None,
+            "eps": None,
+            "beta": None,
+            "dividendYield": None,
+            "fiftyTwoWeekHigh": None,
+            "fiftyTwoWeekLow": None,
+            "open": None,
+            "high": None,
+            "low": None,
+            "prevClose": None,
+            "volume": None,
+            "name": symbol.upper(),
+            "currency": "USD"
+        }
 
 
 @app.get("/api/overview/{symbol}")
