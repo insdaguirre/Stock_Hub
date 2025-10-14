@@ -35,24 +35,10 @@ from auth_utils import (
     get_user_by_email
 )
 import yfinance as yf
-from requests import Session
-from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util.retry import Retry
 
-# Configure a session for yfinance with proper headers and retries
-def get_yf_session():
-    session = Session()
-    session.headers.update({
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    })
-    retry = Retry(total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
-    adapter = HTTPAdapter(max_retries=retry)
-    session.mount('http://', adapter)
-    session.mount('https://', adapter)
-    return session
-
-# Set default session for yfinance
-yf.utils.get_json = lambda *args, **kwargs: get_yf_session().get(*args, **kwargs).json()
+# Temporarily disable yfinance's use of requests_cache for better compatibility
+import os
+os.environ['YF_CACHE_DISABLED'] = '1'
 
 # Prometheus metrics
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
@@ -464,10 +450,7 @@ def fetch_stock_data(symbol, full: bool = False):
             pass
     
     try:
-        # Create ticker with timeout
-        ticker = yf.Ticker(symbol)
-        
-        # Use start/end dates for more reliable fetching
+        # Use yfinance download() which is often more reliable than Ticker().history()
         end_date = last_closed + timedelta(days=1)  # End date exclusive
         if full:
             # Full history: 10 years
@@ -476,13 +459,13 @@ def fetch_stock_data(symbol, full: bool = False):
             # Compact: ~100 days  
             start_date = end_date - timedelta(days=100)
         
-        # Try fetching with date range first
-        hist = ticker.history(start=start_date, end=end_date, timeout=15)
+        # Download historical data
+        hist = yf.download(symbol, start=start_date, end=end_date, progress=False, show_errors=False)
         
         # If empty, try with period as fallback
         if hist.empty:
-            period = '10y' if full else '3mo'  # Use 3mo instead of 100d for better compatibility
-            hist = ticker.history(period=period, timeout=15)
+            period = '10y' if full else '3mo'
+            hist = yf.download(symbol, period=period, progress=False, show_errors=False)
         
         if hist.empty:
             raise Exception(f"No data available for {symbol}")
