@@ -5,7 +5,6 @@ import styled from 'styled-components';
 import { getPredictions, getIntraday, getTimeSeries, getOverview, loadLastPredictions } from '../services/api';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import ProgressBar from './ProgressBar';
-import MatrixBackground from './MatrixBackground';
 import colors from '../styles/colors';
 
 const PageContainer = styled.div`
@@ -676,7 +675,6 @@ const PredictPage = () => {
 
   return (
     <PageContainer>
-      <MatrixBackground />
       <MainContent>
         <Header>
           <Title>Predict</Title>

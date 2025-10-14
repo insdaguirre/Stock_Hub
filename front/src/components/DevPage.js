@@ -1,5 +1,5 @@
 // src/components/DevPage.js
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { FaGithub, FaDatabase, FaServer, FaCloud, FaChartLine, FaCog, FaArrowRight } from 'react-icons/fa';
 import ChipMatrixBackground from './ChipMatrixBackground';
@@ -260,9 +260,20 @@ const FeatureIcon = styled.div`
 
 
 const DevPage = () => {
+  const [contentLoaded, setContentLoaded] = useState(false);
+
+  // Lazy initialization - wait for content to load
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setContentLoaded(true);
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <PageContainer>
-      <ChipMatrixBackground />
+      {contentLoaded && <ChipMatrixBackground />}
       <MainContent>
         <Header>
           <Title>Dev</Title>

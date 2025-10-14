@@ -29,28 +29,28 @@ const CONFIG = {
   // Circuit traces
   traceColor: 'rgba(0, 212, 170, 0.2)',
   traceWidth: 2,
-  traceSpacingHorizontal: 120,
-  traceSpacingVertical: 100,
-  tracePulseSpeed: 0.01,
+  traceSpacingHorizontal: 150,
+  traceSpacingVertical: 120,
+  tracePulseSpeed: 0.005,
   
   // Data packets
   packetSize: 6,
   packetColor: 'rgba(0, 212, 170, 0.8)',
-  packetSpeed: 1.5,
-  packetCount: 15,
-  packetTrailLength: 3,
+  packetSpeed: 1.0,
+  packetCount: 10,
+  packetTrailLength: 2,
   
   // Connection nodes
-  nodeRadius: 6,
+  nodeRadius: 5,
   nodeColor: 'rgba(0, 212, 170, 0.6)',
-  nodeGlowRadius: 12,
-  nodePulseSpeed: 0.015,
+  nodeGlowRadius: 8,
+  nodePulseSpeed: 0.01,
   
   // Binary streams
-  binaryColumns: 12,
-  binarySpeed: 0.5,
-  binaryFontSize: 12,
-  binaryOpacity: 0.3,
+  binaryColumns: 8,
+  binarySpeed: 0.3,
+  binaryFontSize: 11,
+  binaryOpacity: 0.2,
   binaryColor: 'rgba(0, 212, 170, 0.3)',
   
   // Chip outlines
@@ -285,6 +285,8 @@ const ChipMatrixBackground = () => {
   const chipOutlinesRef = useRef([]);
   const [isMobile, setIsMobile] = useState(false);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const [isTabVisible, setIsTabVisible] = useState(!document.hidden);
+  const [contentLoaded, setContentLoaded] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -301,14 +303,38 @@ const ChipMatrixBackground = () => {
   }, []);
 
   useEffect(() => {
+    // Lazy initialization - wait for content to load
+    const timer = setTimeout(() => {
+      setContentLoaded(true);
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    // Handle tab visibility
+    const handleVisibilityChange = () => {
+      setIsTabVisible(!document.hidden);
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !contentLoaded) return;
 
     const ctx = canvas.getContext('2d');
     let animationId;
+    let lastFrameTime = 0;
+    let frameCount = 0;
+    const TARGET_FPS = 30;
+    const FRAME_INTERVAL = 1000 / TARGET_FPS;
 
     const resizeCanvas = () => {
-      const dpr = window.devicePixelRatio || 1;
+      // Use lower DPR on mobile for better performance
+      const dpr = isMobile ? 1 : Math.min(window.devicePixelRatio || 1, 2);
       const rect = canvas.getBoundingClientRect();
       
       canvas.width = rect.width * dpr;
@@ -434,7 +460,22 @@ const ChipMatrixBackground = () => {
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    const animate = () => {
+    const animate = (currentTime) => {
+      animationId = requestAnimationFrame(animate);
+      
+      // Skip rendering when tab is not visible
+      if (!isTabVisible) {
+        return;
+      }
+      
+      // Frame rate limiting
+      if (currentTime - lastFrameTime < FRAME_INTERVAL) {
+        return;
+      }
+      
+      lastFrameTime = currentTime - (currentTime % FRAME_INTERVAL);
+      frameCount++;
+      
       const rect = canvas.getBoundingClientRect();
       const canvasWidth = rect.width;
       const canvasHeight = rect.height;
@@ -452,9 +493,13 @@ const ChipMatrixBackground = () => {
         trace.draw(ctx);
       });
       
-      // Draw binary streams
+      // Draw binary streams (every 3 frames for performance)
+      if (frameCount % 3 === 0) {
+        binaryStreamsRef.current.forEach(stream => {
+          stream.update(canvasHeight);
+        });
+      }
       binaryStreamsRef.current.forEach(stream => {
-        stream.update(canvasHeight);
         stream.draw(ctx);
       });
       
@@ -467,11 +512,12 @@ const ChipMatrixBackground = () => {
       // Update and draw data packets
       dataPacketsRef.current.forEach(packet => {
         packet.update();
-        checkNodeActivation(packet, connectionNodesRef.current);
+        // Check node activation every 5 frames for performance
+        if (frameCount % 5 === 0) {
+          checkNodeActivation(packet, connectionNodesRef.current);
+        }
         packet.draw(ctx);
       });
-
-      animationId = requestAnimationFrame(animate);
     };
 
     animate();
@@ -482,7 +528,7 @@ const ChipMatrixBackground = () => {
         cancelAnimationFrame(animationId);
       }
     };
-  }, [isMobile, prefersReducedMotion]);
+  }, [isMobile, prefersReducedMotion, isTabVisible, contentLoaded]);
 
   return (
     <CanvasWrapper reducedMotion={prefersReducedMotion}>

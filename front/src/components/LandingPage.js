@@ -261,6 +261,16 @@ const MarketOverview = () => {
 const LandingPage = () => {
   const [news, setNews] = useState([]);
   const [newsLoading, setNewsLoading] = useState(true);
+  const [contentLoaded, setContentLoaded] = useState(false);
+
+  // Lazy initialization - wait for content to load
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setContentLoaded(true);
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   // Fetch news articles
   useEffect(() => {
@@ -289,7 +299,7 @@ const LandingPage = () => {
   return (
     <TickerDataProvider>
       <PageContainer>
-        <FinanceBackground />
+        {contentLoaded && <FinanceBackground />}
         <MainContent>
           <Header>
             <Title>StockHub</Title>

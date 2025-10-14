@@ -26,13 +26,13 @@ const StyledCanvas = styled.canvas`
 
 // Configuration for interaction physics
 const CONFIG = {
-  mouseInfluenceRadius: 250,
-  mouseAttractionStrength: 0.3,
-  mouseRepulsionStrength: 0.5,
-  scrollVelocityMultiplier: 0.02,
-  dampingFactor: 0.98,
-  maxVelocity: 2.0,
-  returnToBaseSpeed: 0.05,
+  mouseInfluenceRadius: 200,
+  mouseAttractionStrength: 0.2,
+  mouseRepulsionStrength: 0.3,
+  scrollVelocityMultiplier: 0.01,
+  dampingFactor: 0.95,
+  maxVelocity: 1.5,
+  returnToBaseSpeed: 0.03,
   interactionEnabled: true
 };
 
@@ -307,11 +307,8 @@ class FloatingElement {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       
-      // Add subtle glow for premium feel
-      ctx.shadowColor = this.isPositive 
-        ? (colors.bullGreen || '#00C853')
-        : (colors.bearRed || '#FF3B30');
-      ctx.shadowBlur = 8;
+      // Remove shadow effects for better performance
+      ctx.shadowBlur = 0;
       
       ctx.fillText(this.text, 0, 0);
     }
@@ -351,11 +348,8 @@ class FloatingElement {
     
     ctx.stroke();
     
-    // Add glow
-    ctx.shadowColor = this.isPositive 
-      ? (colors.bullGreen || '#00C853')
-      : (colors.bearRed || '#FF3B30');
-    ctx.shadowBlur = 6;
+    // Remove glow for better performance
+    ctx.shadowBlur = 0;
     ctx.stroke();
     
     ctx.restore();
@@ -372,6 +366,8 @@ const FinanceBackground = () => {
   const [isMobile, setIsMobile] = useState(false);
   const [hasFineMouse, setHasFineMouse] = useState(true);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const [isTabVisible, setIsTabVisible] = useState(!document.hidden);
+  const [contentLoaded, setContentLoaded] = useState(false);
 
   useEffect(() => {
     // Check for mobile and reduced motion preference
@@ -393,15 +389,38 @@ const FinanceBackground = () => {
   }, []);
 
   useEffect(() => {
+    // Lazy initialization - wait for content to load
+    const timer = setTimeout(() => {
+      setContentLoaded(true);
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    // Handle tab visibility
+    const handleVisibilityChange = () => {
+      setIsTabVisible(!document.hidden);
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !contentLoaded) return;
 
     const ctx = canvas.getContext('2d');
     let animationId;
+    let lastFrameTime = 0;
+    const TARGET_FPS = 30;
+    const FRAME_INTERVAL = 1000 / TARGET_FPS;
 
     // Set canvas size
     const resizeCanvas = () => {
-      const dpr = window.devicePixelRatio || 1;
+      // Use lower DPR on mobile for better performance
+      const dpr = isMobile ? 1 : Math.min(window.devicePixelRatio || 1, 2);
       const rect = canvas.getBoundingClientRect();
       
       canvas.width = rect.width * dpr;
@@ -421,8 +440,10 @@ const FinanceBackground = () => {
 
     // Throttled mouse handler (only on devices with fine pointer)
     let mouseTimeout;
+    const enableMouseTracking = !isMobile && hasFineMouse && !prefersReducedMotion;
+    
     const handleMouseMove = (e) => {
-      if (!hasFineMouse || prefersReducedMotion) return;
+      if (!enableMouseTracking) return;
       if (mouseTimeout) return;
       
       mouseTimeout = setTimeout(() => {
@@ -439,7 +460,7 @@ const FinanceBackground = () => {
       mouseRef.current = { x: null, y: null };
     };
 
-    if (hasFineMouse && !prefersReducedMotion) {
+    if (enableMouseTracking) {
       window.addEventListener('mousemove', handleMouseMove, { passive: true });
       canvas.addEventListener('mouseleave', handleMouseLeave);
     }
@@ -465,13 +486,27 @@ const FinanceBackground = () => {
         scrollOffsetRef.current = currentScroll;
         lastScrollRef.current = { y: currentScroll, time: currentTime };
         scrollTimeout = null;
-      }, 16); // ~60fps
+      }, 50); // Increased from 16ms to 50ms for better performance
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
 
     // Animation loop
-    const animate = () => {
+    const animate = (currentTime) => {
+      animationId = requestAnimationFrame(animate);
+      
+      // Skip rendering when tab is not visible
+      if (!isTabVisible) {
+        return;
+      }
+      
+      // Frame rate limiting
+      if (currentTime - lastFrameTime < FRAME_INTERVAL) {
+        return;
+      }
+      
+      lastFrameTime = currentTime - (currentTime % FRAME_INTERVAL);
+      
       const rect = canvas.getBoundingClientRect();
       const canvasWidth = rect.width;
       const canvasHeight = rect.height;
@@ -500,8 +535,6 @@ const FinanceBackground = () => {
         );
         element.draw(ctx, scrollOffsetRef.current);
       });
-
-      animationId = requestAnimationFrame(animate);
     };
 
     animate();
@@ -522,7 +555,7 @@ const FinanceBackground = () => {
         clearTimeout(mouseTimeout);
       }
     };
-  }, [isMobile, hasFineMouse, prefersReducedMotion]);
+  }, [isMobile, hasFineMouse, prefersReducedMotion, isTabVisible, contentLoaded]);
 
   return (
     <CanvasWrapper>

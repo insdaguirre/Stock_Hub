@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import styled from 'styled-components';
 import { useAuth } from '../contexts/AuthContext';
@@ -152,10 +152,20 @@ const LoginPage = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [contentLoaded, setContentLoaded] = useState(false);
   
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // Lazy initialization - wait for content to load
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setContentLoaded(true);
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, []);
   
   // Get the intended destination from state, default to /predict
   const from = location.state?.from || '/predict';
@@ -179,7 +189,7 @@ const LoginPage = () => {
 
   return (
     <PageContainer>
-      <FinanceBackground />
+      {contentLoaded && <FinanceBackground />}
       <LoginCard>
         <Title>Welcome Back</Title>
         <Subtitle>Sign in to access your account</Subtitle>

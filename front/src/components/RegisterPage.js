@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import styled from 'styled-components';
 import { useAuth } from '../contexts/AuthContext';
@@ -170,9 +170,19 @@ const RegisterPage = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [contentLoaded, setContentLoaded] = useState(false);
   
   const { register } = useAuth();
   const navigate = useNavigate();
+
+  // Lazy initialization - wait for content to load
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setContentLoaded(true);
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   const getPasswordStrength = (password) => {
     if (password.length === 0) return '';
@@ -217,7 +227,7 @@ const RegisterPage = () => {
 
   return (
     <PageContainer>
-      <FinanceBackground />
+      {contentLoaded && <FinanceBackground />}
       <RegisterCard>
         <Title>Create Account</Title>
         <Subtitle>Join StockHub to access predictions</Subtitle>
