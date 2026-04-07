@@ -22,13 +22,21 @@ const isDemoMode = () => {
 
 export const DEMO_MODE = isDemoMode();
 
+// Set up global fetch wrapper for demo mode
+if (DEMO_MODE && typeof window !== 'undefined') {
+  window.fetch = function(url, options) {
+    return getMockResponse(url, options?.method || 'GET', options?.body ? JSON.parse(options.body) : null);
+  };
+}
+
 // Resolve API base URL at build/runtime. Prefer env; when hosted on GitHub Pages, fall back to Railway.
 const inferProdBase = () => {
   try {
     if (typeof window !== 'undefined') {
       const host = window.location.hostname || '';
       if (host.endsWith('github.io')) {
-        return 'https://web-production-b6d2.up.railway.app/api';
+        // In demo mode on GitHub Pages, use a dummy URL since all fetches are intercepted
+        return DEMO_MODE ? 'http://demo.local/api' : 'https://web-production-b6d2.up.railway.app/api';
       }
     }
   } catch (_) {}

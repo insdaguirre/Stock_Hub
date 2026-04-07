@@ -237,8 +237,8 @@ export const generateDemoPrediction = (symbol) => {
 // Mock API responses for demo mode
 export const mockApiResponses = {
   // Auth endpoints
-  '/api/auth/login': async (body) => {
-    if (body.username_or_email === 'demo' && body.password === 'demo123') {
+  'login': async (body) => {
+    if (body && body.username_or_email === 'demo' && body.password === 'demo123') {
       return {
         ok: true,
         json: async () => ({
@@ -249,11 +249,12 @@ export const mockApiResponses = {
     }
     return {
       ok: false,
+      status: 401,
       json: async () => ({ detail: 'Invalid credentials' }),
     };
   },
 
-  '/api/auth/me': async () => {
+  'auth/me': async () => {
     return {
       ok: true,
       json: async () => ({
@@ -267,7 +268,7 @@ export const mockApiResponses = {
   },
 
   // Stock quote endpoint
-  '/api/stocks/(\\w+)/quote': async (symbol) => {
+  'quote': async (symbol) => {
     return {
       ok: true,
       json: async () => generateDemoQuote(symbol),
@@ -275,7 +276,7 @@ export const mockApiResponses = {
   },
 
   // Daily series endpoint
-  '/api/stocks/(\\w+)/daily': async (symbol) => {
+  'daily': async (symbol) => {
     return {
       ok: true,
       json: async () => ({
@@ -287,7 +288,7 @@ export const mockApiResponses = {
   },
 
   // Intraday endpoint
-  '/api/stocks/(\\w+)/intraday': async (symbol) => {
+  'intraday': async (symbol) => {
     return {
       ok: true,
       json: async () => ({
@@ -299,7 +300,7 @@ export const mockApiResponses = {
   },
 
   // Overview endpoint
-  '/api/stocks/(\\w+)/overview': async (symbol) => {
+  'overview': async (symbol) => {
     return {
       ok: true,
       json: async () => generateDemoOverview(symbol),
@@ -307,7 +308,7 @@ export const mockApiResponses = {
   },
 
   // News endpoint
-  '/api/stocks/(\\w+)/news': async (symbol) => {
+  'news': async (symbol) => {
     return {
       ok: true,
       json: async () => ({
@@ -319,7 +320,7 @@ export const mockApiResponses = {
   },
 
   // Prediction endpoint
-  '/api/predictions/(\\w+)': async (symbol) => {
+  'predictions': async (symbol) => {
     return {
       ok: true,
       json: async () => generateDemoPrediction(symbol),
@@ -327,7 +328,7 @@ export const mockApiResponses = {
   },
 
   // Portfolio endpoint
-  '/api/portfolio': async () => {
+  'portfolio': async () => {
     return {
       ok: true,
       json: async () => ({
@@ -342,7 +343,7 @@ export const mockApiResponses = {
   },
 
   // Available stocks endpoint
-  '/api/stocks': async () => {
+  'stocks': async () => {
     return {
       ok: true,
       json: async () => ({
@@ -355,33 +356,73 @@ export const mockApiResponses = {
   },
 };
 
-// Match URL pattern and extract parameter
-const matchUrlPattern = (url, pattern) => {
-  const regex = new RegExp('^' + pattern.replace(/\(.*?\)/g, '([^/]+)') + '$');
-  const match = url.match(regex);
-  return match ? match.slice(1) : null;
-};
-
 // Get mock response for a URL
 export const getMockResponse = async (url, method = 'GET', body = null) => {
-  // Remove query parameters and base URL
-  const cleanUrl = url.split('?')[0];
-  
-  for (const [pattern, handler] of Object.entries(mockApiResponses)) {
-    if (method === 'POST' && pattern === '/api/auth/login' && cleanUrl.endsWith(pattern)) {
-      return handler(body);
-    }
-    if (method === 'GET') {
-      const params = matchUrlPattern(cleanUrl, pattern);
-      if (params) {
-        return handler(params[0]);
-      }
-    }
+  // Extract path from URL
+  let path = url;
+  try {
+    // Remove protocol, domain, and port
+    const urlObj = new URL(url, window.location.origin);
+    path = urlObj.pathname + urlObj.search;
+  } catch (_) {
+    // Fallback: just use the URL as-is
+    path = url;
   }
 
+  // Remove /Stock_Hub prefix (GitHub Pages path) and /api prefix
+  path = path.replace(/\/Stock_Hub/g, '').replace(/^\/api\/?/g, '').split('?')[0];
+  
+  // Match patterns - check for specific routes
+  if (path.includes('auth/login')) {
+    return mockApiResponses['login'](body);
+  }
+  if (path.includes('auth/me')) {
+    return mockApiResponses['auth/me']();
+  }
+  
+  // Extract symbol from path (e.g., /stocks/AAPL/quote -> AAPL)
+  const symbolMatch = path.match(/stocks\/([A-Z]+)/);
+  const symbol = symbolMatch ? symbolMatch[1] : null;
+  
+  // Match stock endpoints
+  if (path.includes('daily') && symbol) {
+    return mockApiResponses['daily'](symbol);
+  }
+  if (path.includes('intraday') && symbol) {
+    return mockApiResponses['intraday'](symbol);
+  }
+  if (path.includes('quote') && symbol) {
+    return mockApiResponses['quote'](symbol);
+  }
+  if (path.includes('overview') && symbol) {
+    return mockApiResponses['overview'](symbol);
+  }
+  if (path.includes('news') && symbol) {
+    return mockApiResponses['news'](symbol);
+  }
+  
+  // Match prediction endpoint
+  if (path.includes('predictions')) {
+    const predMatch = path.match(/predictions\/([A-Z]+)/);
+    if (predMatch) {
+      return mockApiResponses['predictions'](predMatch[1]);
+    }
+  }
+  
+  // Match portfolio endpoint
+  if (path.includes('portfolio')) {
+    return mockApiResponses['portfolio']();
+  }
+  
+  // Match stocks list endpoint
+  if (path === 'stocks' || path === 'stocks/') {
+    return mockApiResponses['stocks']();
+  }
+
+  // Default 404 response
   return {
     ok: false,
     status: 404,
-    json: async () => ({ detail: 'Not found' }),
+    json: async () => ({ detail: 'Not found in demo mode' }),
   };
 };
