@@ -1,7 +1,13 @@
 node_modules/
 .env
+.env.local
 __pycache__/
 *.pyc
 saved_models/
 .DS_Store
 build/
+.venv/
+venv/
+*.db
+*.sqlite3
+*.map
