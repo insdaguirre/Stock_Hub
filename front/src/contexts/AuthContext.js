@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BASE_URL } from '../services/api';
+import { BASE_URL, DEMO_MODE } from '../services/api';
 
 const AuthContext = createContext();
 
@@ -32,6 +32,21 @@ export const AuthProvider = ({ children }) => {
 
   const verifyToken = async (tokenToVerify) => {
     try {
+      // In demo mode, just validate that we have a token
+      if (DEMO_MODE) {
+        const userData = {
+          id: 1,
+          username: 'demo',
+          email: 'demo@stockhubdemo.com',
+          firstName: 'Demo',
+          lastName: 'User',
+        };
+        setUser(userData);
+        setToken(tokenToVerify);
+        setLoading(false);
+        return;
+      }
+
       const response = await fetch(`${BASE_URL}/auth/me`, {
         headers: {
           'Authorization': `Bearer ${tokenToVerify}`,
@@ -61,6 +76,27 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (usernameOrEmail, password) => {
     try {
+      // In demo mode, check credentials client-side
+      if (DEMO_MODE) {
+        if (usernameOrEmail === 'demo' && password === 'demo123') {
+          const demoToken = 'demo-token-' + Date.now();
+          localStorage.setItem('stockhub_token', demoToken);
+          setToken(demoToken);
+          
+          const userData = {
+            id: 1,
+            username: 'demo',
+            email: 'demo@stockhubdemo.com',
+            firstName: 'Demo',
+            lastName: 'User',
+          };
+          setUser(userData);
+          return { success: true };
+        } else {
+          return { success: false, error: 'Invalid demo credentials. Use demo/demo123' };
+        }
+      }
+
       const response = await fetch(`${BASE_URL}/auth/login`, {
         method: 'POST',
         headers: {
@@ -96,6 +132,11 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (username, email, password) => {
     try {
+      // In demo mode, don't allow registration
+      if (DEMO_MODE) {
+        return { success: false, error: 'Registration not available in demo mode. Use demo/demo123 to login.' };
+      }
+
       const response = await fetch(`${BASE_URL}/auth/register`, {
         method: 'POST',
         headers: {

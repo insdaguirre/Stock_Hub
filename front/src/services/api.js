@@ -1,4 +1,27 @@
 // src/services/api.js
+import { getMockResponse } from './demoData';
+
+// Detect if running in demo mode (GitHub Pages or explicit flag)
+const isDemoMode = () => {
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname || '';
+    // GitHub Pages demo is always demo mode
+    if (host.endsWith('github.io')) {
+      return true;
+    }
+    // Allow explicit demo mode via URL param or localStorage
+    if (new URLSearchParams(window.location.search).get('demo') === 'true') {
+      return true;
+    }
+    if (localStorage.getItem('demo_mode') === 'true') {
+      return true;
+    }
+  }
+  return false;
+};
+
+export const DEMO_MODE = isDemoMode();
+
 // Resolve API base URL at build/runtime. Prefer env; when hosted on GitHub Pages, fall back to Railway.
 const inferProdBase = () => {
   try {
@@ -44,6 +67,11 @@ const handleUnauthorized = () => {
 
 // Helper function to make authenticated requests
 const makeRequest = async (url, options = {}) => {
+  // In demo mode, intercept API calls and return mock data
+  if (DEMO_MODE) {
+    return getMockResponse(url, options.method || 'GET', options.body ? JSON.parse(options.body) : null);
+  }
+
   const response = await fetch(url, {
     ...options,
     headers: {
