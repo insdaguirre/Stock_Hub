@@ -4,6 +4,7 @@ import styled from 'styled-components';
 import { useAuth } from '../contexts/AuthContext';
 import FinanceBackground from './FinanceBackground';
 import colors from '../styles/colors';
+import { DEMO_CREDENTIALS } from '../services/demoData';
 
 const PageContainer = styled.div`
   min-height: 100vh;
@@ -115,6 +116,17 @@ const ErrorMessage = styled.div`
   text-align: center;
 `;
 
+const DemoHint = styled.div`
+  background: rgba(0, 212, 170, 0.08);
+  border: 1px solid rgba(0, 212, 170, 0.25);
+  border-radius: 8px;
+  padding: 12px;
+  color: ${colors.textSecondary};
+  font-size: 14px;
+  margin-bottom: 1rem;
+  line-height: 1.5;
+`;
+
 const LinkText = styled.p`
   text-align: center;
   margin-top: 1.5rem;
@@ -148,8 +160,8 @@ const LoadingSpinner = styled.div`
 `;
 
 const LoginPage = () => {
-  const [usernameOrEmail, setUsernameOrEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [usernameOrEmail, setUsernameOrEmail] = useState(DEMO_CREDENTIALS.username);
+  const [password, setPassword] = useState(DEMO_CREDENTIALS.password);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [contentLoaded, setContentLoaded] = useState(false);
@@ -192,7 +204,11 @@ const LoginPage = () => {
       {contentLoaded && <FinanceBackground />}
       <LoginCard>
         <Title>Welcome Back</Title>
-        <Subtitle>Sign in to access your account</Subtitle>
+        <Subtitle>Sign in to access the local StockHub demo</Subtitle>
+
+        <DemoHint>
+          Demo credentials: <strong>{DEMO_CREDENTIALS.username}</strong> / <strong>{DEMO_CREDENTIALS.password}</strong>
+        </DemoHint>
         
         <Form onSubmit={handleSubmit}>
           <InputGroup>

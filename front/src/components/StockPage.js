@@ -154,7 +154,7 @@ const DiamondDot = ({ cx, cy, large }) => {
 const StockPage = () => { //Defines StockPage as a functional react component
   const { symbol } = useParams(); //Defines a variable called symbol that gets the value of the URL parameter
   const [searchParams] = useSearchParams();
-  const modelId = searchParams.get('model');
+  const modelId = searchParams.get('model') || '1';
   const navigate = useNavigate();
   
   const [stockData, setStockData] = useState(null);

@@ -8,6 +8,7 @@ import FinanceBackground from './FinanceBackground';
 import { getNews } from '../services/api';
 import { TickerDataProvider, useTickerData } from '../contexts/TickerDataContext';
 import colors from '../styles/colors';
+import { DEMO_CREDENTIALS } from '../services/demoData';
 
 const PageContainer = styled.div`
   min-height: 100vh;
@@ -180,6 +181,12 @@ const CTAButton = styled.button`
   }
 `;
 
+const DemoCredentials = styled.div`
+  margin-top: 1rem;
+  color: ${colors.textSecondary};
+  font-size: 14px;
+`;
+
 const CacheInfo = styled.div`
   text-align: center;
   font-size: 12px;
@@ -306,14 +313,16 @@ const LandingPage = () => {
           </Header>
 
           <CTASection>
-            <CTATitle>Unlock Advanced Stock Predictions</CTATitle>
+            <CTATitle>Explore the Static StockHub Demo</CTATitle>
             <CTADescription>
-              Create a free account to access our AI-powered stock prediction models, 
-              personalized insights, and advanced market analysis tools.
+              This build runs entirely on local mock data. Sign in with the demo account to browse stock detail pages, predictions, market summaries, and news without any backend services.
             </CTADescription>
-            <CTAButton onClick={() => window.location.href = '#/register'}>
-              for free
+            <CTAButton onClick={() => window.location.href = '#/login'}>
+              Open Demo Login
             </CTAButton>
+            <DemoCredentials>
+              Credentials: <strong>{DEMO_CREDENTIALS.username}</strong> / <strong>{DEMO_CREDENTIALS.password}</strong>
+            </DemoCredentials>
           </CTASection>
 
           <SectionTitle>Latest Financial News</SectionTitle>

@@ -4,6 +4,8 @@ import styled from 'styled-components';
 import { useAuth } from '../contexts/AuthContext';
 import FinanceBackground from './FinanceBackground';
 import colors from '../styles/colors';
+import { DEMO_CREDENTIALS } from '../services/demoData';
+import { DEMO_MODE } from '../services/api';
 
 const PageContainer = styled.div`
   min-height: 100vh;
@@ -163,6 +165,17 @@ const PasswordStrength = styled.div`
   margin-top: 0.25rem;
 `;
 
+const DemoNotice = styled.div`
+  background: rgba(0, 212, 170, 0.08);
+  border: 1px solid rgba(0, 212, 170, 0.25);
+  border-radius: 8px;
+  padding: 16px;
+  color: ${colors.textSecondary};
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: center;
+`;
+
 const RegisterPage = () => {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -230,8 +243,22 @@ const RegisterPage = () => {
       {contentLoaded && <FinanceBackground />}
       <RegisterCard>
         <Title>Create Account</Title>
-        <Subtitle>Join StockHub to access predictions</Subtitle>
-        
+        <Subtitle>{DEMO_MODE ? 'This build uses a single local demo account' : 'Join StockHub to access predictions'}</Subtitle>
+
+        {DEMO_MODE ? (
+          <>
+            <DemoNotice>
+              Registration is disabled in demo mode. Sign in with <strong>{DEMO_CREDENTIALS.username}</strong> / <strong>{DEMO_CREDENTIALS.password}</strong>.
+            </DemoNotice>
+            <Button type="button" onClick={() => navigate('/login')} style={{ marginTop: '1.5rem' }}>
+              Go to Demo Login
+            </Button>
+            <LinkText>
+              Already have access? <StyledLink to="/login">Sign in</StyledLink>
+            </LinkText>
+          </>
+        ) : (
+          <>
         <Form onSubmit={handleSubmit}>
           <InputGroup>
             <Label htmlFor="username">Username</Label>
@@ -296,6 +323,8 @@ const RegisterPage = () => {
         <LinkText>
           Already have an account? <StyledLink to="/login">Sign in</StyledLink>
         </LinkText>
+        </>
+        )}
       </RegisterCard>
     </PageContainer>
   );

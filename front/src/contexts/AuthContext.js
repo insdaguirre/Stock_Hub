@@ -1,6 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BASE_URL, DEMO_MODE } from '../services/api';
+import {
+  DEMO_CREDENTIALS,
+  DEMO_USER,
+  clearDemoSession,
+  createDemoSession,
+  isDemoToken,
+  readDemoSession,
+} from '../services/demoData';
 
 const AuthContext = createContext();
 
@@ -32,17 +40,19 @@ export const AuthProvider = ({ children }) => {
 
   const verifyToken = async (tokenToVerify) => {
     try {
-      // In demo mode, just validate that we have a token
       if (DEMO_MODE) {
-        const userData = {
-          id: 1,
-          username: 'demo',
-          email: 'demo@stockhubdemo.com',
-          firstName: 'Demo',
-          lastName: 'User',
-        };
-        setUser(userData);
-        setToken(tokenToVerify);
+        const session = readDemoSession();
+        if (!session || !isDemoToken(tokenToVerify) || session.token !== tokenToVerify) {
+          clearDemoSession();
+          localStorage.removeItem('stockhub_token');
+          setToken(null);
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+
+        setUser(session.user || DEMO_USER);
+        setToken(session.token);
         setLoading(false);
         return;
       }
@@ -76,24 +86,21 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (usernameOrEmail, password) => {
     try {
-      // In demo mode, check credentials client-side
       if (DEMO_MODE) {
-        if (usernameOrEmail === 'demo' && password === 'demo123') {
-          const demoToken = 'demo-token-' + Date.now();
-          localStorage.setItem('stockhub_token', demoToken);
-          setToken(demoToken);
-          
-          const userData = {
-            id: 1,
-            username: 'demo',
-            email: 'demo@stockhubdemo.com',
-            firstName: 'Demo',
-            lastName: 'User',
-          };
-          setUser(userData);
+        if (
+          usernameOrEmail === DEMO_CREDENTIALS.username &&
+          password === DEMO_CREDENTIALS.password
+        ) {
+          const session = createDemoSession();
+          localStorage.setItem('stockhub_token', session.token);
+          setToken(session.token);
+          setUser(session.user);
           return { success: true };
         } else {
-          return { success: false, error: 'Invalid demo credentials. Use demo/demo123' };
+          return {
+            success: false,
+            error: `Invalid demo credentials. Use ${DEMO_CREDENTIALS.username}/${DEMO_CREDENTIALS.password}`,
+          };
         }
       }
 
@@ -132,9 +139,11 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (username, email, password) => {
     try {
-      // In demo mode, don't allow registration
       if (DEMO_MODE) {
-        return { success: false, error: 'Registration not available in demo mode. Use demo/demo123 to login.' };
+        return {
+          success: false,
+          error: `Registration is disabled in demo mode. Sign in with ${DEMO_CREDENTIALS.username}/${DEMO_CREDENTIALS.password}.`,
+        };
       }
 
       const response = await fetch(`${BASE_URL}/auth/register`, {
@@ -169,6 +178,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem('stockhub_token');
+    clearDemoSession();
     setToken(null);
     setUser(null);
     navigate('/');
