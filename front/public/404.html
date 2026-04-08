@@ -1,15 +1,18 @@
 <!doctype html>
 <html>
   <head>
-    <meta http-equiv="refresh" content="0; url=/Stock_Hub/" />
+    <meta http-equiv="refresh" content="0; url=./" />
     <script>
-      // SPA redirect for GitHub Pages
-      var l = window.location;
-      var path = l.pathname.replace(/^\/Stock_Hub\//, '');
-      l.replace('/Stock_Hub/?redirect=' + encodeURIComponent(path + l.search + l.hash));
+      (function () {
+        var l = window.location;
+        var segments = l.pathname.split('/').filter(Boolean);
+        var basePath = segments.length ? '/' + segments[0] + '/' : '/';
+        var routeSegments = segments.length > 1 ? segments.slice(1) : [];
+        var routePath = routeSegments.length ? '/' + routeSegments.join('/') : '/';
+        l.replace(basePath + '#' + routePath + l.search + l.hash);
+      })();
     </script>
   </head>
   <body></body>
-  </html>
-
+</html>
 

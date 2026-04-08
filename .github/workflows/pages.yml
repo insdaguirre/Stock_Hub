@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [ main ]
+    branches: [ demo ]
   workflow_dispatch:
 
 permissions:
@@ -29,6 +29,9 @@ jobs:
         working-directory: front
       - name: Build
         run: npm run build
+        working-directory: front
+      - name: Add .nojekyll
+        run: touch build/.nojekyll
         working-directory: front
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

@@ -470,7 +470,7 @@ The system is deployed with the following Railway services:
 ## Frontend
 
 - Path: `front/`
-- Router basename: `/Stock_Hub` (for GitHub Pages)
+- GitHub Pages demo build uses relative asset paths plus `HashRouter`, so it can be served from `/<project-name>-demo/`
 - **Authentication**: JWT-based login/register system with protected routes
 - **Components**: Landing page, prediction interface, stock analysis, user authentication
 - Uses `getPredictions`, `getStockData`, and job polling via `/api/jobs/:id`
@@ -544,7 +544,7 @@ cd front
 npm start
 ```
 
-`front/src/services/api.js` points to `http://localhost:8000/api` when not on GitHub Pages.
+Production demo builds are forced into local demo mode via `front/.env.production`, so GitHub Pages does not require any backend runtime.
 
 ### Testing the integration
 
@@ -677,5 +677,4 @@ The current system is designed to work within free API tier limitations:
 ## License
 
 MIT — see `LICENSE` if present, otherwise all rights reserved by the author.
-
 

@@ -79,7 +79,9 @@ const getAuthHeaders = () => {
 
 const handleUnauthorized = () => {
   localStorage.removeItem('stockhub_token');
-  window.location.href = '/#/login';
+  if (typeof window !== 'undefined') {
+    window.location.hash = '/login';
+  }
 };
 
 const makeRequest = async (url, options = {}) => {
