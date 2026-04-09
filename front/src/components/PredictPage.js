@@ -1,5 +1,5 @@
 // src/components/PredictPage.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { getPredictions, getIntraday, getTimeSeries, getOverview, loadLastPredictions } from '../services/api';
@@ -326,11 +326,46 @@ const LoadingOverlay = styled.div`
   border-radius: 12px;
 `;
 
+const normalizeSymbol = (value = '') => value.trim().toUpperCase();
+
+const isValidSymbol = (value) => /^[A-Z]{1,5}$/.test(normalizeSymbol(value));
+
+const SearchControls = memo(function SearchControls({ selectedSymbol, loading, onSubmit }) {
+  const [inputValue, setInputValue] = useState(selectedSymbol);
+
+  useEffect(() => {
+    setInputValue(selectedSymbol);
+  }, [selectedSymbol]);
+
+  const handleSubmit = () => {
+    onSubmit(inputValue);
+  };
+
+  return (
+    <SearchSection>
+      <SearchInput
+        type="text"
+        placeholder="Enter stock symbol (e.g., AAPL, MSFT, GOOGL)"
+        value={inputValue}
+        onChange={(e) => setInputValue(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') { handleSubmit(); } }}
+      />
+
+      <StockSelector>
+        <StockSelectorTitle>Selected Symbol: {selectedSymbol}</StockSelectorTitle>
+        <PredictButton
+          onClick={handleSubmit}
+          disabled={loading}
+        >
+          {loading ? 'Getting Predictions…' : 'Get Predictions'}
+        </PredictButton>
+      </StockSelector>
+    </SearchSection>
+  );
+});
+
 const PredictPage = () => {
   const navigate = useNavigate();
-  const [searchTerm, setSearchTerm] = useState(() => {
-    try { return localStorage.getItem('sh:lastSymbol') || ''; } catch (_) { return ''; }
-  });
   const [selectedSymbol, setSelectedSymbol] = useState(() => {
     try { return localStorage.getItem('sh:lastSymbol') || 'SPY'; } catch (_) { return 'SPY'; }
   });
@@ -344,7 +379,6 @@ const PredictPage = () => {
   const [range, setRange] = useState('1D');
   const [series, setSeries] = useState(null);
   const [overview, setOverview] = useState(null);
-  const [lastFullDate, setLastFullDate] = useState(null);
   const [dataLoading, setDataLoading] = useState(true);
   const seriesCacheRef = useRef({});
 
@@ -474,8 +508,9 @@ const PredictPage = () => {
     return interval;
   };
 
-  const fetchPredictions = async () => {
-    if (!selectedSymbol) return;
+  const fetchPredictions = useCallback(async (symbolOverride) => {
+    const symbol = normalizeSymbol(symbolOverride || selectedSymbol);
+    if (!symbol) return;
     
     try {
       setLoading(true);
@@ -484,12 +519,12 @@ const PredictPage = () => {
       const modelIds = [1, 2, 3, 4, 5];
       const progressInterval = simulateProgress(modelIds);
       
-      const data = await getPredictions(selectedSymbol);
+      const data = await getPredictions(symbol);
       setPredictionsData(data);
       
       try { 
         localStorage.setItem('sh:lastPredModelData', JSON.stringify({ 
-          symbol: selectedSymbol, 
+          symbol, 
           at: Date.now(), 
           models: data.models 
         })); 
@@ -520,7 +555,7 @@ const PredictPage = () => {
       console.error('Error:', err);
       setLoading(false);
     }
-  };
+  }, [range, selectedSymbol]);
 
   // API status monitoring removed to fix ESLint warnings
 
@@ -529,6 +564,7 @@ const PredictPage = () => {
     let mounted = true;
     setDataLoading(true);
     const load = async () => {
+      let latestSessionDay = null;
       let intrResp = null;
       try {
         const intr = await getIntraday(selectedSymbol);
@@ -597,7 +633,7 @@ const PredictPage = () => {
           const y = d.getFullYear();
           const m = String(d.getMonth() + 1).padStart(2, '0');
           const da = String(d.getDate()).padStart(2, '0');
-          setLastFullDate(`${y}-${m}-${da}`);
+          latestSessionDay = `${y}-${m}-${da}`;
         }
       } catch (_) {}
       
@@ -616,7 +652,7 @@ const PredictPage = () => {
             const priceNum = p && typeof p.price === 'number' ? p.price : Number(p.price);
             return { xTs, price: priceNum };
           });
-          const clamped = (lastFullDate && ptsArr && ptsArr.length)
+          const clamped = (latestSessionDay && ptsArr && ptsArr.length)
             ? ptsArr.filter(pt => {
                 try {
                   const d = new Date(pt.xTs);
@@ -624,7 +660,7 @@ const PredictPage = () => {
                   const m = String(d.getMonth() + 1).padStart(2, '0');
                   const da = String(d.getDate()).padStart(2, '0');
                   const dayStr = `${y}-${m}-${da}`;
-                  return dayStr <= lastFullDate;
+                  return dayStr <= latestSessionDay;
                 } catch (_) { return true; }
               })
             : ptsArr;
@@ -635,16 +671,20 @@ const PredictPage = () => {
     };
     load();
     return () => { mounted = false; };
-  }, [selectedSymbol, lastFullDate]);
+  }, [selectedSymbol]);
 
-  const handleSearch = (e) => {
-    setSearchTerm(e.target.value);
-    if (/^[A-Z]{1,5}$/.test(e.target.value.toUpperCase())) {
-      const sym = e.target.value.toUpperCase();
-      setSelectedSymbol(sym);
-      try { localStorage.setItem('sh:lastSymbol', sym); } catch (_) {}
+  const handleSearchSubmit = useCallback((value) => {
+    const nextSymbol = normalizeSymbol(value);
+
+    if (isValidSymbol(nextSymbol) && nextSymbol !== selectedSymbol) {
+      setSelectedSymbol(nextSymbol);
+      try { localStorage.setItem('sh:lastSymbol', nextSymbol); } catch (_) {}
+      fetchPredictions(nextSymbol);
+      return;
     }
-  };
+
+    fetchPredictions(selectedSymbol);
+  }, [fetchPredictions, selectedSymbol]);
 
   const handleModelClick = (modelId) => {
     if (selectedSymbol) {
@@ -881,25 +921,11 @@ const PredictPage = () => {
           </IntradayCard>
         )}
 
-        <SearchSection>
-          <SearchInput
-            type="text"
-            placeholder="Enter stock symbol (e.g., AAPL, MSFT, GOOGL)"
-            value={searchTerm}
-            onChange={handleSearch}
-            onKeyDown={(e) => { if (e.key === 'Enter') { fetchPredictions(); } }}
-          />
-          
-          <StockSelector>
-            <StockSelectorTitle>Selected Symbol: {selectedSymbol}</StockSelectorTitle>
-            <PredictButton
-              onClick={fetchPredictions}
-              disabled={loading}
-            >
-              {loading ? 'Getting Predictions…' : 'Get Predictions'}
-            </PredictButton>
-          </StockSelector>
-        </SearchSection>
+        <SearchControls
+          selectedSymbol={selectedSymbol}
+          loading={loading}
+          onSubmit={handleSearchSubmit}
+        />
 
         <DisclaimerText>
           Due to data pricing, the model pipeline and auto-trainer have been scaled down.
